@@ -10,6 +10,7 @@ readme = "README.md"
 keywords = ["python3", "paleobiology", "paleontology", "paleobiology-database", "streamlit" ]
 requires-python = ">=3.13"
 dependencies = [
+    "requests>=2.32.5",
     "streamlit>=1.50.0",
 ]
 
