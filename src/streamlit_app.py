@@ -162,7 +162,7 @@ def display_single_result(info: dict):
 
 def render_header():
     """Render the application header."""
-    st.title("PBDB Publication Lookup")
+    st.title("Species Reference Publication Lookup")
     st.markdown(
         "_Query the Paleobiology Database for species publication "
         "information._"
