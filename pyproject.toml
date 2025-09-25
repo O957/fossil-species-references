@@ -4,7 +4,7 @@ version = "0.0.1"
 authors = [
   {name = "O957", email = "127630341+O957@users.noreply.github.com"},
 ]
-description = "Streamlit application for retrieving original publication data for fauna from the Paleobiology Database. ."
+description = "Streamlit application and standalone Python script for retrieving original publication data for fauna using the Paleobiology Database."
 license = "Apache-2.0"
 readme = "README.md"
 keywords = ["python3", "paleobiology", "paleontology", "paleobiology-database", "streamlit" ]
