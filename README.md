@@ -1,8 +1,79 @@
-# BLANK README
+# Fossil Species References Application
 
-This repository was generated from [AFg6K7h4fhy2](https://github.com/AFg6K7h4fhy2)'s [template repository](https://github.com/AFg6K7h4fhy2/AFg6K7h4fhy2-Template).
+> [!CAUTION]
+>
+> This project is very new and as such may have inadequacies, including bugs and errors. If you spot something that you would like changed, please make an issue [here](https://github.com/O957/fossil-species-references/issues) or contact the author [here](https://o957.github.io/#contact-information).
 
-If you are seeing this message, then this repository likely contains no meaningful content.
+## This Repository
+
+__What is this repository?__
+
+This repository consists of a Streamlit application and standalone Python script for retrieving original publication data for fauna using the Paleobiology Database.
+
+__What background information is needed?__
+
+* Only knowledge of fossil fauna is needed (e.g. _Enchodus petrosus_ or _Inoceramus proximus_) to get started.
+* (optional) To run items locally you will need to have Python3 installed.
+
+__What is in this repository?__
+
+* The folder `.github` contains:
+  * GitHub workflows for dependency management (`deptry`), styling and linting (`pre-commit`), and type-checking (`ty`) (see [here]()).
+  * Code owners file (see [here]()).
+* The folder `assets` contains:
+  * Decisions relevant to this repository (see [here]()).
+  * A feature list for this repository (see [here]()).
+  * Glossary terms relevant to this repository (see [here]()).
+  * Online resources relevant to this repository (see [here]()).
+  * A project roadmap for this repository (see [here]()).
+
+## Usage
+
+__How can this repository be used?__
+
+This repository supports:
+
+1. Using public and free `streamlit` application hosted online [here]().
+2. Locally hosting the `streamlit` application yourself.
+3. Using the command line script yourself.
+
+For (1) and (2):
+
+* Head to <https://docs.astral.sh/uv/getting-started/installation/> to install UV.
+
+For (1):
+
+* `git clone https://github.com/O957/fossil-species-references.git`
+* `cd fossil-species-references`
+* `cd src`
+* `uv run streamlit run streamlit_app.py`
+
+For (2):
+
+* `git clone https://github.com/O957/fossil-species-references.git`
+* `cd fossil-species-references`
+* `cd src`
+* `uv run python3 pbdb_publication_lookup.py --help`
+
+
+## Contributing
+
+__How may I contribute to this project?__
+
+* Making an [issue](https://github.com/O957/fossil-species-references/issues) (comment, feature, bug) in this repository.
+* Making a [pull request](https://github.com/O957/fossil-species-references/pulls) to this repository.
+* Engaging in a [discussion thread](https://github.com/O957/fossil-species-references/discussions) in this repository.
+* Contacting me via email: [my username]+[@]+[pro]+[ton]+[.]+[me]
+
+## Motivation
+
+__Why does this repository exist?__
+
+This repository exists because:
+
+* I kept seeing (Cope, 1874) without the title of the original publication anywhere nearby.
+* I found the Paleobiology Database's interface frustrating to use for finding the author information for a single fossil species.
+
 
 ## License Standard Notice
 
