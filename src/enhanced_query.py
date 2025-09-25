@@ -12,6 +12,7 @@ from reference_resolver import (
     ReferenceResolver,
     format_reference_citation,
 )
+from streamlit_app import process_pbdb_record
 
 PBDB_BASE_URL = "https://paleobiodb.org/data1.2"
 DEFAULT_TIMEOUT = 10
@@ -56,8 +57,6 @@ def enhanced_query_pbdb(
         record = data["records"][0]
 
         # process the PBDB record as before
-        from streamlit_app import process_pbdb_record
-
         result = process_pbdb_record(record, organism_name)
 
         # if there's an attribution mismatch and resolution is enabled

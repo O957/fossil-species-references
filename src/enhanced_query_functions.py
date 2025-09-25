@@ -5,6 +5,8 @@ with the existing PBDB lookup functionality.
 """
 
 import json
+import sys
+import time
 
 import requests
 
@@ -14,6 +16,7 @@ from reference_resolver_functions import (
     resolve_reference_by_title,
     validate_reference_match,
 )
+from streamlit_app import process_pbdb_record
 
 PBDB_BASE_URL = "https://paleobiodb.org/data1.2"
 DEFAULT_TIMEOUT = 10
@@ -82,8 +85,6 @@ def enhanced_query_pbdb(
         record = data["records"][0]
 
         # process the PBDB record as before
-        from streamlit_app import process_pbdb_record
-
         result = process_pbdb_record(record, organism_name)
 
         # always attempt to find external links when resolution is enabled
@@ -252,8 +253,6 @@ def query_multiple_species_enhanced(
     tuple[list[dict], list[str], list[dict]]
         (successful_results, not_found_species, error_results)
     """
-    import sys
-    import time
 
     results = []
     not_found = []
@@ -291,7 +290,6 @@ def query_multiple_species_enhanced(
 
 # example usage and testing
 if __name__ == "__main__":
-    import sys
 
     if len(sys.argv) > 1:
         organism = sys.argv[1]
