@@ -1,0 +1,12 @@
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "light"
+primaryColor = "#D2691E" # buttons, links, active elements
+backgroundColor = "#FFF8DC" # main background
+secondaryBackgroundColor = "#F4A460"  # sidebar, containers
+textColor = "#8B4513" # main text color
+linkColor = "#D2691E" # links
+font = "serif" # body text
+headingFont = "serif" # headings
