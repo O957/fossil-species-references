@@ -525,7 +525,7 @@ def render_footer():
         "feature, bug) in this repository.\n"
         "* Making a [pull request]("
         "https://github.com/O957/fossil-species-references/pulls) to this "
-        "repository\n."
+        "repository.\n"
         "* Engaging in a [discussion thread]("
         "https://github.com/O957/fossil-species-references/discussions) in "
         "this repository.\n"
