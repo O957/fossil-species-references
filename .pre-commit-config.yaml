@@ -54,6 +54,8 @@ repos:
     # checks for a common error of placing
     # code before the docstring.
     -   id: check-docstring-first
+    # checks validity of json files
+    -   id: check-json
     # attempts to load all yaml files to
     # verify syntax.
     -   id: check-yaml
