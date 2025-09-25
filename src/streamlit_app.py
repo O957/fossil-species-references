@@ -164,20 +164,22 @@ def render_header():
     """Render the application header."""
     st.title("PBDB Publication Lookup")
     st.markdown(
-        "Query the Paleobiology Database for species publication information"
+        "_Query the Paleobiology Database for species publication "
+        "information._"
     )
-    st.markdown("---")
 
 
 def render_single_species_tab():
-    """Render the single species lookup interface."""
-    st.markdown("### Enter a single species name")
+    """
+    Render the single species lookup interface.
+    """
+    st.markdown("### Enter A Single Species Name")
 
     # single species input
     species_input = st.text_input(
-        "Species name",
+        "Species Name",
         placeholder="e.g., Enchodus petrosus",
-        help="Enter the scientific name of the species",
+        help="Enter the scientific name of the species.",
     )
 
     col1, col2 = st.columns([1, 5])
@@ -255,16 +257,16 @@ def parse_uploaded_file(uploaded_file) -> list[str]:
 
 def render_file_upload_tab():
     """Render the file upload interface for batch processing."""
-    st.markdown("### Upload a text file with species names")
+    st.markdown("### Upload Text File With Species Names")
     st.info(
         "File format: One species name per line. Lines starting with # are "
         "ignored."
     )
 
     uploaded_file = st.file_uploader(
-        "Choose a text file",
+        "Choose Text File",
         type=["txt"],
-        help="Upload a text file with one species name per line",
+        help="Upload a text file with one species name per line.",
     )
 
     if uploaded_file is not None:
@@ -273,7 +275,7 @@ def render_file_upload_tab():
         if species_list:
             handle_uploaded_species_list(species_list)
         else:
-            st.warning("No valid species names found in file")
+            st.warning("No valid species names found in file.")
 
 
 def handle_uploaded_species_list(species_list: list[str]):
@@ -285,7 +287,7 @@ def handle_uploaded_species_list(species_list: list[str]):
     species_list : list[str]
         List of species names from file.
     """
-    st.success(f"Found {len(species_list)} species in file")
+    st.success(f"Found {len(species_list)} species in file.")
 
     # show species list in expander
     with st.expander("View species list"):
