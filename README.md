@@ -17,6 +17,8 @@ __What background information is needed?__
 
 __What is in this repository?__
 
+* The folder `.devcontainer` contains:
+  * Items necessary for the `streamlit` application to be hosted online (see [here](https://github.com/O957/fossil-species-references/tree/main/.devcontainer)).
 * The folder `.github` contains:
   * GitHub workflows for dependency management (`deptry`), styling and linting (`pre-commit`), and type-checking (`ty`) (see [here](https://github.com/O957/fossil-species-references/tree/main/.github/workflows)).
   * Code owners file (see [here](https://github.com/O957/fossil-species-references/blob/main/.github/CODEOWNERS)).
