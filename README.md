@@ -18,14 +18,20 @@ __What background information is needed?__
 __What is in this repository?__
 
 * The folder `.github` contains:
-  * GitHub workflows for dependency management (`deptry`), styling and linting (`pre-commit`), and type-checking (`ty`) (see [here]()).
-  * Code owners file (see [here]()).
+  * GitHub workflows for dependency management (`deptry`), styling and linting (`pre-commit`), and type-checking (`ty`) (see [here](https://github.com/O957/fossil-species-references/tree/main/.github/workflows)).
+  * Code owners file (see [here](https://github.com/O957/fossil-species-references/blob/main/.github/CODEOWNERS)).
+  * A `dependabot` workflow file (see [here](https://github.com/O957/fossil-species-references/blob/main/.github/dependabot.yaml)).
+* The folder `.streamlit` contains:
+  * A `streamlit` theme file (see [here](https://github.com/O957/fossil-species-references/blob/main/.streamlit/config.toml)).
 * The folder `assets` contains:
-  * Decisions relevant to this repository (see [here]()).
-  * A feature list for this repository (see [here]()).
-  * Glossary terms relevant to this repository (see [here]()).
-  * Online resources relevant to this repository (see [here]()).
-  * A project roadmap for this repository (see [here]()).
+  * Decisions relevant to this repository (see [here](https://github.com/O957/fossil-species-references/blob/main/assets/misc/decisions.md)).
+  * A feature list for this repository (see [here](https://github.com/O957/fossil-species-references/blob/main/assets/misc/feature-list.md)).
+  * Glossary terms relevant to this repository (see [here](https://github.com/O957/fossil-species-references/blob/main/assets/misc/glossary.md)).
+  * Online resources relevant to this repository (see [here](https://github.com/O957/fossil-species-references/blob/main/assets/misc/resources.md)).
+  * A project roadmap for this repository (see [here](https://github.com/O957/fossil-species-references/blob/main/assets/misc/roadmap.md)).
+* The folder `src` contains:
+  * The standalone species reference finder script `pbdb_publication_lookup.py` (see [here](https://github.com/O957/fossil-species-references/blob/main/src/pbdb_publication_lookup.py)).
+  * The `streamlit` application (which is hosted publicly but can also be locally served) (see [here](https://github.com/O957/fossil-species-references/blob/main/src/streamlit_app.py)).
 
 ## Usage
 
@@ -59,6 +65,8 @@ For (2):
 ## Contributing
 
 __How may I contribute to this project?__
+
+First look at the Contribution file (see [here](https://github.com/O957/fossil-species-references/blob/main/CONTRIBUTING.md)).
 
 * Making an [issue](https://github.com/O957/fossil-species-references/issues) (comment, feature, bug) in this repository.
 * Making a [pull request](https://github.com/O957/fossil-species-references/pulls) to this repository.
