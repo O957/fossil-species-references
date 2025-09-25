@@ -24,6 +24,30 @@ SEPARATOR = "=" * DISPLAY_WIDTH
 SUBSEPARATOR = "-" * DISPLAY_WIDTH
 
 
+def normalize_taxonomic_authority(authority: str) -> str:
+    """
+    Normalize taxonomic authority to always have parentheses.
+
+    Parameters
+    ----------
+    authority : str
+        The taxonomic authority string.
+
+    Returns
+    -------
+    str
+        Normalized authority with parentheses.
+    """
+    if authority == NOT_AVAILABLE:
+        return authority
+
+    # remove existing parentheses and normalize
+    clean_authority = authority.replace("(", "").replace(")", "").strip()
+
+    # add parentheses
+    return f"({clean_authority})"
+
+
 def extract_year_from_attribution(attribution: str) -> str | None:
     """
     Extract year from taxonomic attribution string.
@@ -260,7 +284,7 @@ def format_single_result(info: dict) -> str:
     """
     lines = [
         f"\nOrganism: {info['organism']}",
-        f"Taxonomic Authority: {info['author']}",
+        f"Taxonomic Authority: {normalize_taxonomic_authority(info['author'])}",
     ]
 
     if info["year"]:
