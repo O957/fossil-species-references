@@ -12,7 +12,7 @@ This repository consists of a Streamlit application and standalone Python script
 
 __What background information is needed?__
 
-* Only knowledge of fossil fauna is needed (e.g. _Enchodus petrosus_ or _Inoceramus proximus_) to get started.
+* Only knowledge of fossil fauna is needed (e.g. _Enchodus petrosus_ or _Diplodocus carnegii_) to get started.
 * (optional) To run items locally you will need to have Python3 installed.
 
 __What is in this repository?__
