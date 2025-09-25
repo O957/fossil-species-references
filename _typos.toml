@@ -8,10 +8,7 @@ AttributeIDSupressMenu = "AttributeIDSupressMenu"
 
 [default.extend-words]
 # words that should not be corrected
-AFg6K7h4fhy2 = "AFg6K7h4fhy2"
-dot_acn = ".acn"
-dot_fot = ".fot"
-dot_ist = ".ist"
+nam = "nam"
 
 [files]
 extend-exclude = [
