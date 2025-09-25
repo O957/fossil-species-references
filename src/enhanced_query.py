@@ -8,15 +8,16 @@ import json
 
 import requests
 
+from config_loader import (
+    DEFAULT_TIMEOUT,
+    PBDB_BASE_URL,
+    PBDB_HEADERS,
+)
+from pbdb_publication_lookup import process_pbdb_record
 from reference_resolver import (
     ReferenceResolver,
     format_reference_citation,
 )
-from streamlit_app import process_pbdb_record
-
-PBDB_BASE_URL = "https://paleobiodb.org/data1.2"
-DEFAULT_TIMEOUT = 10
-NOT_AVAILABLE = "Not available"
 
 
 def enhanced_query_pbdb(
@@ -46,6 +47,7 @@ def enhanced_query_pbdb(
         response = requests.get(
             f"{PBDB_BASE_URL}/taxa/list.json",
             params=params,
+            headers=PBDB_HEADERS,
             timeout=DEFAULT_TIMEOUT,
         )
         response.raise_for_status()

@@ -10,41 +10,21 @@ import time
 
 import requests
 
+from config_loader import (
+    DEFAULT_TIMEOUT,
+    PBDB_BASE_URL,
+    PBDB_HEADERS,
+)
+from pbdb_publication_lookup import (
+    normalize_taxonomic_authority,
+    process_pbdb_record,
+)
 from reference_resolver_functions import (
     format_reference_citation,
     resolve_reference,
     resolve_reference_by_title,
     validate_reference_match,
 )
-from streamlit_app import process_pbdb_record
-
-PBDB_BASE_URL = "https://paleobiodb.org/data1.2"
-DEFAULT_TIMEOUT = 10
-NOT_AVAILABLE = "Not available"
-
-
-def normalize_taxonomic_authority(authority: str) -> str:
-    """
-    Normalize taxonomic authority to always have parentheses.
-
-    Parameters
-    ----------
-    authority : str
-        The taxonomic authority string.
-
-    Returns
-    -------
-    str
-        Normalized authority with parentheses.
-    """
-    if authority == NOT_AVAILABLE:
-        return authority
-
-    # remove existing parentheses and normalize
-    clean_authority = authority.replace("(", "").replace(")", "").strip()
-
-    # add parentheses
-    return f"({clean_authority})"
 
 
 def enhanced_query_pbdb(
@@ -74,6 +54,7 @@ def enhanced_query_pbdb(
         response = requests.get(
             f"{PBDB_BASE_URL}/taxa/list.json",
             params=params,
+            headers=PBDB_HEADERS,
             timeout=DEFAULT_TIMEOUT,
         )
         response.raise_for_status()
@@ -269,7 +250,7 @@ def query_multiple_species_enhanced(
 
         # rate limiting
         if i > 0:
-            time.sleep(0.1)
+            time.sleep(0.5)
 
         info = enhanced_query_pbdb(
             species.strip(), resolve_missing, bhl_api_key
@@ -290,7 +271,6 @@ def query_multiple_species_enhanced(
 
 # example usage and testing
 if __name__ == "__main__":
-
     if len(sys.argv) > 1:
         organism = sys.argv[1]
 

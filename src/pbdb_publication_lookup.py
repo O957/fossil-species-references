@@ -15,11 +15,15 @@ from time import sleep
 
 import requests
 
-PBDB_BASE_URL = "https://paleobiodb.org/data1.2"
-DEFAULT_TIMEOUT = 10
-NOT_AVAILABLE = "Not available"
+from config_loader import (
+    API_DELAY,
+    DEFAULT_TIMEOUT,
+    NOT_AVAILABLE,
+    PBDB_BASE_URL,
+    PBDB_HEADERS,
+)
+
 DISPLAY_WIDTH = 80
-API_DELAY = 0.1  # seconds between requests to be respectful to API
 SEPARATOR = "=" * DISPLAY_WIDTH
 SUBSEPARATOR = "-" * DISPLAY_WIDTH
 
@@ -168,6 +172,7 @@ def query_pbdb(organism_name: str) -> dict | None:
         response = requests.get(
             f"{PBDB_BASE_URL}/taxa/list.json",
             params=params,
+            headers=PBDB_HEADERS,
             timeout=DEFAULT_TIMEOUT,
         )
         response.raise_for_status()

@@ -11,15 +11,18 @@ from pathlib import Path
 
 import requests
 
-# cache configuration
-CACHE_DIR = Path.home() / ".cache" / "fossil_references"
-CACHE_FILE = CACHE_DIR / "reference_cache.json"
+from config_loader import (
+    BHL_BASE_URL,
+    CACHE_DIR_NAME,
+    CACHE_FILE_NAME,
+    CACHE_SUBDIR_NAME,
+    CROSSREF_BASE_URL,
+    WORMS_BASE_URL,
+)
 
-# api configuration
-CROSSREF_BASE_URL = "https://api.crossref.org/works"
-BHL_BASE_URL = "https://www.biodiversitylibrary.org/api3"
-WORMS_BASE_URL = "https://www.marinespecies.org/rest"
-GBIF_BASE_URL = "https://api.gbif.org/v1"
+# cache configuration
+CACHE_DIR = Path.home() / CACHE_DIR_NAME / CACHE_SUBDIR_NAME
+CACHE_FILE = CACHE_DIR / CACHE_FILE_NAME
 
 
 @dataclass

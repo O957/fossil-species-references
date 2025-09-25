@@ -16,35 +16,7 @@ from enhanced_query_functions import (
     enhanced_query_pbdb,
     query_multiple_species_enhanced,
 )
-
-PBDB_BASE_URL = "https://paleobiodb.org/data1.2"
-DEFAULT_TIMEOUT = 10
-NOT_AVAILABLE = "Not available"
-API_DELAY = 0.1
-
-
-def normalize_taxonomic_authority(authority: str) -> str:
-    """
-    Normalize taxonomic authority to always have parentheses.
-
-    Parameters
-    ----------
-    authority : str
-        The taxonomic authority string.
-
-    Returns
-    -------
-    str
-        Normalized authority with parentheses.
-    """
-    if authority == NOT_AVAILABLE:
-        return authority
-
-    # remove existing parentheses and normalize
-    clean_authority = authority.replace("(", "").replace(")", "").strip()
-
-    # add parentheses
-    return f"({clean_authority})"
+from pbdb_publication_lookup import normalize_taxonomic_authority
 
 
 def configure_page():
