@@ -283,6 +283,30 @@ def render_file_upload_tab():
         help="Upload a text file with one species name per line.",
     )
 
+    # example file content
+    with st.expander("📋 Example File Format"):
+        st.markdown("**Copy this example content to create your own file:**")
+        example_content = """# Example fossil species list
+# Lines starting with # are ignored as comments
+Tyrannosaurus rex
+Triceratops horridus
+Allosaurus fragilis
+Stegosaurus stenops
+Brontosaurus excelsus
+Diplodocus carnegii
+Archaeopteryx lithographica
+Ichthyosaurus communis
+Plesiosaaurus dolichodeirus
+Ammonites bisulcatus"""
+        st.code(example_content, language="text")
+        st.download_button(
+            label="📥 Download Example File",
+            data=example_content,
+            file_name="example_species_list.txt",
+            mime="text/plain",
+            help="Download this example as a text file",
+        )
+
     if uploaded_file is not None:
         species_list = parse_uploaded_file(uploaded_file)
 
@@ -480,15 +504,33 @@ def offer_batch_download(
 def render_footer():
     """Render the application footer with information."""
     st.markdown("---")
-    st.markdown("### About")
+    st.markdown("### Notes")
     st.markdown(
         "This tool queries the "
         "[Paleobiology Database](https://paleobiodb.org) "
-        "to retrieve original publication information for species."
+        "to retrieve original publication information for species.\n\n"
+        "The repository for this application can be found here: "
+        "<https://github.com/O957/fossil-species-references>.\n\n"
+        "The license for this application: "
+        "<https://github.com/O957/fossil-species-references/blob/main/LICENSE>"
     )
     st.markdown(
-        "**Note:** A small delay is added between queries to be respectful "
+        "**NOTE** A small delay is added between queries to be respectful "
         "to the PBDB API."
+    )
+    st.markdown(
+        "__How may I contribute to this project?__\n"
+        "* Making an [issue]("
+        "https://github.com/O957/fossil-species-references/issues) (comment, "
+        "feature, bug) in this repository.\n"
+        "* Making a [pull request]("
+        "https://github.com/O957/fossil-species-references/pulls) to this "
+        "repository\n."
+        "* Engaging in a [discussion thread]("
+        "https://github.com/O957/fossil-species-references/discussions) in "
+        "this repository.\n"
+        "* Contacting me via email: [my github username]+[@]+[pro]+[ton]+[.]+"
+        "[me]"
     )
 
 
