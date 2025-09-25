@@ -39,7 +39,7 @@ __How can this repository be used?__
 
 This repository supports:
 
-1. Using public and free `streamlit` application hosted online [here]().
+1. Using the online `streamlit` application hosted [here](https://fsr-pbdb.streamlit.app/).
 2. Locally hosting the `streamlit` application yourself.
 3. Using the command line script yourself.
 
