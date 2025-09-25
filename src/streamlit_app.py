@@ -27,6 +27,104 @@ def configure_page():
     )
 
 
+def extract_year_from_attribution(attribution: str) -> str | None:
+    """
+    Extract year from taxonomic attribution string.
+
+    Parameters
+    ----------
+    attribution : str
+        The attribution string (e.g., "Cope 1874").
+
+    Returns
+    -------
+    str | None
+        The extracted year or None if not found.
+    """
+    if attribution == NOT_AVAILABLE:
+        return None
+
+    parts = attribution.split()
+    if parts and parts[-1].isdigit():
+        return parts[-1]
+    return None
+
+
+def check_attribution_mismatch(
+    attribution: str, ref_author: str, ref_year: str
+) -> bool:
+    """
+    Check if taxonomic attribution matches the reference.
+
+    Parameters
+    ----------
+    attribution : str
+        The taxonomic attribution (e.g., "Whitley 1939").
+    ref_author : str
+        The reference author.
+    ref_year : str
+        The reference year.
+
+    Returns
+    -------
+    bool
+        True if there's a mismatch, False otherwise.
+    """
+    if attribution == NOT_AVAILABLE or ref_author == NOT_AVAILABLE:
+        return False
+
+    # clean up attribution for comparison
+    att_clean = attribution.replace("(", "").replace(")", "").lower()
+    ref_combined = f"{ref_author} {ref_year}".lower()
+
+    # check if they don't match
+    return att_clean not in ref_combined and not ref_combined.startswith(
+        att_clean.split()[0]
+    )
+
+
+def process_pbdb_record(record: dict, organism_name: str) -> dict:
+    """
+    Process a PBDB record into standardized format.
+
+    Parameters
+    ----------
+    record : dict
+        The PBDB record.
+    organism_name : str
+        The original organism name queried.
+
+    Returns
+    -------
+    dict
+        Processed publication information.
+    """
+    # taxonomic attribution (original author and year)
+    author = record.get("att", NOT_AVAILABLE)
+
+    # reference author and year (may differ from attribution)
+    ref_author = record.get("aut", NOT_AVAILABLE)
+    ref_year = record.get("pby", NOT_AVAILABLE)
+
+    # extract year from author attribution
+    year = extract_year_from_attribution(author)
+
+    # check if attribution matches reference
+    attribution_mismatch = check_attribution_mismatch(
+        author, ref_author, ref_year
+    )
+
+    return {
+        "organism": record.get("nam", organism_name),
+        "author": author,
+        "year": year,
+        "full_reference": record.get("ref", NOT_AVAILABLE),
+        "attribution_mismatch": attribution_mismatch,
+        "ref_author": ref_author,
+        "ref_year": ref_year,
+    }
+
+
 def query_pbdb(organism_name: str) -> dict | None:
     """
     Retrieve publication information for a given organism
@@ -43,7 +141,7 @@ def query_pbdb(organism_name: str) -> dict | None:
         Dictionary containing publication info, error
         info, or None if not found.
     """
-    params = {"name": organism_name, "show": "attr,ref,app"}
+    params = {"name": organism_name, "show": "attr,ref,refattr,app"}
 
     try:
         response = requests.get(
@@ -58,21 +156,7 @@ def query_pbdb(organism_name: str) -> dict | None:
             return None
 
         record = data["records"][0]
-        author = record.get("att", NOT_AVAILABLE)
-
-        # extract year from author attribution if present
-        year = None
-        if author != NOT_AVAILABLE:
-            parts = author.split()
-            if parts and parts[-1].isdigit():
-                year = parts[-1]
-
-        return {
-            "organism": record.get("nam", organism_name),
-            "author": author,
-            "year": year,
-            "full_reference": record.get("ref", NOT_AVAILABLE),
-        }
+        return process_pbdb_record(record, organism_name)
 
     except requests.RequestException as e:
         return {"error": f"Connection error: {e}", "organism": organism_name}
@@ -140,11 +224,21 @@ def display_single_result(info: dict):
     with st.container():
         st.markdown('<div class="result-box">', unsafe_allow_html=True)
 
+        # show warning if there's a mismatch
+        if info.get("attribution_mismatch"):
+            st.warning(
+                f"⚠️ **Note:** The taxonomic authority {info['author']} "
+                "does not match "
+                f"the reference below ({info.get('ref_author', 'N/A')}). "
+                f"The original describing paper by {info['author']} may not "
+                "be available in PBDB."
+            )
+
         col1, col2 = st.columns([1, 3])
 
         with col1:
             st.write("**Organism:**")
-            st.write("**Author:**")
+            st.write("**Taxonomic Authority:**")
             if info.get("year"):
                 st.write("**Year:**")
 
@@ -154,7 +248,7 @@ def display_single_result(info: dict):
             if info.get("year"):
                 st.write(info["year"])
 
-        st.write("**Full Reference:**")
+        st.write("**Reference in PBDB:**")
         st.text(info["full_reference"])
 
         st.markdown("</div>", unsafe_allow_html=True)
