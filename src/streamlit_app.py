@@ -1,16 +1,21 @@
 """
-Streamlit web application for PBDB Publication Lookup.
-This app allows users to query the Paleobiology Database
-for publication information about species, either
-individually or in batch from a file.
+Enhanced Streamlit web application for PBDB Publication
+Lookup with reference resolution. This app allows users to
+query the Paleobiology Database for publication information
+about species, and automatically attempts to resolve
+missing original references.
 """
 
 import json
-import time
 from io import StringIO
 
-import requests
 import streamlit as st
+
+# import our enhanced functions
+from enhanced_query_functions import (
+    enhanced_query_pbdb,
+    query_multiple_species_enhanced,
+)
 
 PBDB_BASE_URL = "https://paleobiodb.org/data1.2"
 DEFAULT_TIMEOUT = 10
@@ -18,203 +23,44 @@ NOT_AVAILABLE = "Not available"
 API_DELAY = 0.1
 
 
+def normalize_taxonomic_authority(authority: str) -> str:
+    """
+    Normalize taxonomic authority to always have parentheses.
+
+    Parameters
+    ----------
+    authority : str
+        The taxonomic authority string.
+
+    Returns
+    -------
+    str
+        Normalized authority with parentheses.
+    """
+    if authority == NOT_AVAILABLE:
+        return authority
+
+    # remove existing parentheses and normalize
+    clean_authority = authority.replace("(", "").replace(")", "").strip()
+
+    # add parentheses
+    return f"({clean_authority})"
+
+
 def configure_page():
     """
     Configure Streamlit page settings.
     """
     st.set_page_config(
-        page_title="PBDB Publication Lookup", page_icon="📚", layout="wide"
+        page_title="Enhanced PBDB Publication Lookup",
+        page_icon="🔍",
+        layout="wide",
     )
 
 
-def extract_year_from_attribution(attribution: str) -> str | None:
+def display_enhanced_single_result(info: dict):
     """
-    Extract year from taxonomic attribution string.
-
-    Parameters
-    ----------
-    attribution : str
-        The attribution string (e.g., "Cope 1874").
-
-    Returns
-    -------
-    str | None
-        The extracted year or None if not found.
-    """
-    if attribution == NOT_AVAILABLE:
-        return None
-
-    parts = attribution.split()
-    if parts and parts[-1].isdigit():
-        return parts[-1]
-    return None
-
-
-def check_attribution_mismatch(
-    attribution: str, ref_author: str, ref_year: str
-) -> bool:
-    """
-    Check if taxonomic attribution matches the reference.
-
-    Parameters
-    ----------
-    attribution : str
-        The taxonomic attribution (e.g., "Whitley 1939").
-    ref_author : str
-        The reference author.
-    ref_year : str
-        The reference year.
-
-    Returns
-    -------
-    bool
-        True if there's a mismatch, False otherwise.
-    """
-    if attribution == NOT_AVAILABLE or ref_author == NOT_AVAILABLE:
-        return False
-
-    # clean up attribution for comparison
-    att_clean = attribution.replace("(", "").replace(")", "").lower()
-    ref_combined = f"{ref_author} {ref_year}".lower()
-
-    # check if they don't match
-    return att_clean not in ref_combined and not ref_combined.startswith(
-        att_clean.split()[0]
-    )
-
-
-def process_pbdb_record(record: dict, organism_name: str) -> dict:
-    """
-    Process a PBDB record into standardized format.
-
-    Parameters
-    ----------
-    record : dict
-        The PBDB record.
-    organism_name : str
-        The original organism name queried.
-
-    Returns
-    -------
-    dict
-        Processed publication information.
-    """
-    # taxonomic attribution (original author and year)
-    author = record.get("att", NOT_AVAILABLE)
-
-    # reference author and year (may differ from attribution)
-    ref_author = record.get("aut", NOT_AVAILABLE)
-    ref_year = record.get("pby", NOT_AVAILABLE)
-
-    # extract year from author attribution
-    year = extract_year_from_attribution(author)
-
-    # check if attribution matches reference
-    attribution_mismatch = check_attribution_mismatch(
-        author, ref_author, ref_year
-    )
-
-    return {
-        "organism": record.get("nam", organism_name),
-        "author": author,
-        "year": year,
-        "full_reference": record.get("ref", NOT_AVAILABLE),
-        "attribution_mismatch": attribution_mismatch,
-        "ref_author": ref_author,
-        "ref_year": ref_year,
-    }
-
-
-def query_pbdb(organism_name: str) -> dict | None:
-    """
-    Retrieve publication information for a given organism
-    from PBDB.
-
-    Parameters
-    ----------
-    organism_name : str
-        The scientific name of the organism to look up.
-
-    Returns
-    -------
-    dict | None
-        Dictionary containing publication info, error
-        info, or None if not found.
-    """
-    params = {"name": organism_name, "show": "attr,ref,refattr,app"}
-
-    try:
-        response = requests.get(
-            f"{PBDB_BASE_URL}/taxa/list.json",
-            params=params,
-            timeout=DEFAULT_TIMEOUT,
-        )
-        response.raise_for_status()
-        data = response.json()
-
-        if not data.get("records"):
-            return None
-
-        record = data["records"][0]
-        return process_pbdb_record(record, organism_name)
-
-    except requests.RequestException as e:
-        return {"error": f"Connection error: {e}", "organism": organism_name}
-    except json.JSONDecodeError as e:
-        return {"error": f"Parse error: {e}", "organism": organism_name}
-
-
-def query_multiple_species(
-    species_list: list[str],
-) -> tuple[list[dict], list[str], list[dict]]:
-    """
-    Query PBDB for multiple species.
-
-    Parameters
-    ----------
-    species_list : list[str]
-        List of species names to query.
-
-    Returns
-    -------
-    tuple[list[dict], list[str], list[dict]]
-        (successful_results, not_found_species, error_results)
-    """
-    results = []
-    not_found = []
-    errors = []
-
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-
-    for i, species in enumerate(species_list):
-        # update progress
-        progress = (i + 1) / len(species_list)
-        progress_bar.progress(progress)
-        status_text.text(f"Querying: {species} ({i + 1}/{len(species_list)})")
-
-        # rate limiting
-        if i > 0:
-            time.sleep(API_DELAY)
-
-        info = query_pbdb(species.strip())
-
-        if info is None:
-            not_found.append(species)
-        elif "error" in info:
-            errors.append(info)
-        else:
-            results.append(info)
-
-    progress_bar.empty()
-    status_text.empty()
-
-    return results, not_found, errors
-
-
-def display_single_result(info: dict):
-    """
-    Display a single species result in a formatted box.
+    Display a single species result with enhanced reference information.
 
     Parameters
     ----------
@@ -244,35 +90,127 @@ def display_single_result(info: dict):
 
         with col2:
             st.write(info["organism"])
-            st.write(info["author"])
+            st.write(normalize_taxonomic_authority(info["author"]))
             if info.get("year"):
                 st.write(info["year"])
 
         st.write("**Reference in PBDB:**")
         st.text(info["full_reference"])
 
+        # show external reference if found (always show if available)
+        if info.get("external_reference"):
+            ext = info["external_reference"]
+
+            # if there's a mismatch, call it the original reference
+            if info.get("attribution_mismatch"):
+                st.success(
+                    f"✅ **Original Reference Found** (via {ext['source']}):"
+                )
+            else:
+                st.info(
+                    f"🔗 **External Reference Found** (via {ext['source']}):"
+                )
+
+            st.text(ext["formatted_citation"])
+
+            # add links if available
+            col_doi, col_url = st.columns(2)
+            if ext.get("doi"):
+                with col_doi:
+                    st.markdown(
+                        f"[📄 View Paper](https://doi.org/{ext['doi']})"
+                    )
+            if ext.get("url"):
+                with col_url:
+                    st.markdown(f"[🔗 External Link]({ext['url']})")
+
+        # show additional context for mismatches
+        if info.get("attribution_mismatch"):
+            if info.get("validation_failed"):
+                st.info(
+                    "ℹ️ **External reference found but did not match PBDB "
+                    "reference** - hiding potentially unrelated paper to "
+                    "avoid confusion."
+                )
+            elif info.get("resolution_attempted"):
+                st.info(
+                    "🔍 **Reference Resolution Attempted**: Could not locate "
+                    "the original paper in external databases."
+                )
+
         st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_header():
     """Render the application header."""
-    st.title("Species Reference Publication Lookup")
+    st.title("Enhanced Species Reference Publication Lookup")
     st.markdown(
-        "_Query the Paleobiology Database for species publication "
-        "information._"
+        "_Query the Paleobiology Database for species publication information "
+        "with automatic resolution of missing original references._"
     )
 
 
-def render_single_species_tab():
+def render_settings_sidebar():
+    """
+    Render the settings sidebar.
+
+    Returns
+    -------
+    dict
+        Settings configuration.
+    """
+    st.sidebar.header("⚙️ Settings")
+
+    # reference resolution settings
+    enable_resolution = st.sidebar.checkbox(
+        "Enable Reference Resolution",
+        value=True,
+        help=(
+            "Automatically search for original references when PBDB has "
+            "mismatches"
+        ),
+    )
+
+    # api key input
+    bhl_api_key = st.sidebar.text_input(
+        "BHL API Key (Optional)",
+        type="password",
+        help=(
+            "Biodiversity Heritage Library API key for better historical "
+            "reference coverage"
+        ),
+    )
+
+    # info about external sources
+    with st.sidebar.expander("ℹ️ External Sources"):
+        st.markdown("""
+        When enabled, the system searches:
+        - **CrossRef**: Modern papers with DOIs
+        - **WoRMS**: Marine species authorities
+        - **BHL**: Historical biodiversity literature
+        """)
+
+    return {
+        "enable_resolution": enable_resolution,
+        "bhl_api_key": bhl_api_key if bhl_api_key else None,
+    }
+
+
+def render_single_species_tab(settings: dict):
     """
     Render the single species lookup interface.
+
+    Parameters
+    ----------
+    settings : dict
+        Application settings.
     """
     st.markdown("### Enter A Single Species Name")
 
     # single species input
     species_input = st.text_input(
         "Species Name",
-        placeholder="e.g., Enchodus petrosus",
+        placeholder="e.g., Enchodus petrosus, Squalicorax",
         help="Enter the scientific name of the species.",
     )
 
@@ -283,36 +221,45 @@ def render_single_species_tab():
         )
 
     if search_button and species_input:
-        with st.spinner("Querying PBDB..."):
-            result = query_pbdb(species_input)
+        with st.spinner("Querying PBDB and resolving references..."):
+            result = enhanced_query_pbdb(
+                species_input,
+                resolve_missing=settings["enable_resolution"],
+                bhl_api_key=settings["bhl_api_key"],
+            )
 
-        handle_single_species_result(result, species_input)
+        handle_single_species_result(result, species_input, settings)
 
 
-def handle_single_species_result(result: dict | None, species_input: str):
+def handle_single_species_result(
+    result: dict, species_input: str, settings: dict
+):
     """
     Handle and display the result of a single species query.
 
     Parameters
     ----------
-    result : dict | None
-        Query result from PBDB.
+    result : dict
+        Query result from enhanced PBDB query.
     species_input : str
         The species name that was searched.
+    settings : dict
+        Application settings.
     """
-    if result is None:
-        st.error(f"No publication information found for '{species_input}'")
-        st.info(
-            "Possible reasons:\n"
-            "- The species name may be spelled differently\n"
-            "- The species may not be in the database\n"
-            "- Try searching without 'cf.' or other qualifiers"
-        )
-    elif "error" in result:
-        st.error(f"Error: {result['error']}")
+    if "error" in result:
+        if "No records found" in result["error"]:
+            st.error(f"No publication information found for '{species_input}'")
+            st.info(
+                "Possible reasons:\n"
+                "- The species name may be spelled differently\n"
+                "- The species may not be in the database\n"
+                "- Try searching without 'cf.' or other qualifiers"
+            )
+        else:
+            st.error(f"Error: {result['error']}")
     else:
         st.success("Found publication information:")
-        display_single_result(result)
+        display_enhanced_single_result(result)
 
         # download options
         col1, col2 = st.columns(2)
@@ -320,21 +267,98 @@ def handle_single_species_result(result: dict | None, species_input: str):
             st.download_button(
                 label="Download as JSON",
                 data=json.dumps(result, indent=2),
-                file_name=f"{species_input.replace(' ', '_')}.json",
+                file_name=f"{species_input.replace(' ', '_')}_enhanced.json",
                 mime="application/json",
             )
         with col2:
             # format as text
-            text_content = f"""Organism: {result["organism"]}
-Author: {result["author"]}
-Year: {result.get("year", "Not available")}
-Full Reference: {result["full_reference"]}"""
+            text_content = format_result_as_text(result)
             st.download_button(
                 label="Download as Text",
                 data=text_content,
-                file_name=f"{species_input.replace(' ', '_')}.txt",
+                file_name=f"{species_input.replace(' ', '_')}_enhanced.txt",
                 mime="text/plain",
             )
+
+
+def format_result_as_text(result: dict) -> str:
+    """
+    Format result as text content.
+
+    Parameters
+    ----------
+    result : dict
+        Result dictionary.
+
+    Returns
+    -------
+    str
+        Formatted text content.
+    """
+    lines = [
+        f"Organism: {result['organism']}",
+        f"Taxonomic Authority: {normalize_taxonomic_authority(result['author'])}",
+        f"Year: {result.get('year', 'Not available')}",
+        "",
+        "PBDB Reference:",
+        result["full_reference"],
+    ]
+
+    # show external reference if found
+    if result.get("external_reference"):
+        ext = result["external_reference"]
+        lines.extend(
+            [
+                "",
+                f"🔗 External Reference Found (via {ext['source']}):",
+                ext["formatted_citation"],
+            ]
+        )
+
+        if ext.get("doi"):
+            lines.append(f"DOI: {ext['doi']}")
+        if ext.get("url"):
+            lines.append(f"URL: {ext['url']}")
+
+    if result.get("attribution_mismatch"):
+        lines.extend(
+            [
+                "",
+                "⚠️ Attribution Mismatch Detected:",
+                f"   Taxonomic Authority: {result['author']}",
+                f"   PBDB Reference: {result.get('ref_author', 'N/A')} "
+                f"{result.get('ref_year', 'N/A')}",
+            ]
+        )
+
+        if result.get("external_reference"):
+            lines.append(
+                "   The external reference above is likely the original "
+                "describing paper."
+            )
+        elif result.get("validation_failed"):
+            lines.extend(
+                [
+                    "",
+                    (
+                        "ℹ️ External reference found but did not match PBDB "
+                        "reference"
+                    ),
+                    "   Hiding potentially unrelated paper to avoid confusion",
+                ]
+            )
+        elif result.get("resolution_attempted"):
+            lines.extend(
+                [
+                    "",
+                    (
+                        "❌ Could not locate original reference in external "
+                        "sources"
+                    ),
+                ]
+            )
+
+    return "\n".join(lines)
 
 
 def parse_uploaded_file(uploaded_file) -> list[str]:
@@ -363,8 +387,15 @@ def parse_uploaded_file(uploaded_file) -> list[str]:
     return species_list
 
 
-def render_file_upload_tab():
-    """Render the file upload interface for batch processing."""
+def render_file_upload_tab(settings: dict):
+    """
+    Render the file upload interface for batch processing.
+
+    Parameters
+    ----------
+    settings : dict
+        Application settings.
+    """
     st.markdown("### Upload Text File With Species Names")
     st.info(
         "File format: One species name per line. Lines starting with # are "
@@ -384,14 +415,9 @@ def render_file_upload_tab():
 # Lines starting with # are ignored as comments
 Tyrannosaurus rex
 Triceratops horridus
-Allosaurus fragilis
-Stegosaurus stenops
-Brontosaurus excelsus
-Diplodocus carnegii
-Archaeopteryx lithographica
-Ichthyosaurus communis
-Plesiosaaurus dolichodeirus
-Ammonites bisulcatus"""
+Squalicorax
+Enchodus petrosus
+Allosaurus fragilis"""
         st.code(example_content, language="text")
         st.download_button(
             label="📥 Download Example File",
@@ -405,12 +431,12 @@ Ammonites bisulcatus"""
         species_list = parse_uploaded_file(uploaded_file)
 
         if species_list:
-            handle_uploaded_species_list(species_list)
+            handle_uploaded_species_list(species_list, settings)
         else:
             st.warning("No valid species names found in file.")
 
 
-def handle_uploaded_species_list(species_list: list[str]):
+def handle_uploaded_species_list(species_list: list[str], settings: dict):
     """
     Handle processing of uploaded species list.
 
@@ -418,6 +444,8 @@ def handle_uploaded_species_list(species_list: list[str]):
     ----------
     species_list : list[str]
         List of species names from file.
+    settings : dict
+        Application settings.
     """
     st.success(f"Found {len(species_list)} species in file.")
 
@@ -431,14 +459,21 @@ def handle_uploaded_species_list(species_list: list[str]):
         st.markdown("---")
         st.markdown("### Results")
 
-        # query all species
-        results, not_found, errors = query_multiple_species(species_list)
+        # query all species with enhanced resolution
+        results, not_found, errors = query_multiple_species_enhanced(
+            species_list,
+            resolve_missing=settings["enable_resolution"],
+            bhl_api_key=settings["bhl_api_key"],
+            show_progress=False,  # streamlit will show progress
+        )
 
         # display results
         display_batch_results(results, not_found, errors, species_list)
 
 
-def display_batch_summary(total: int, found: int, not_found: int):
+def display_batch_summary(
+    total: int, found: int, not_found: int, resolved: int
+):
     """
     Display summary metrics for batch processing.
 
@@ -450,14 +485,18 @@ def display_batch_summary(total: int, found: int, not_found: int):
         Number of species found.
     not_found : int
         Number of species not found.
+    resolved : int
+        Number of species with resolved references.
     """
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Total Queried", total)
     with col2:
         st.metric("Found", found)
     with col3:
         st.metric("Not Found", not_found)
+    with col4:
+        st.metric("References Resolved", resolved)
 
 
 def display_batch_results(
@@ -480,14 +519,19 @@ def display_batch_results(
     species_list : list[str]
         Original species list.
     """
+    # count resolved references
+    resolved_count = sum(1 for r in results if r.get("original_reference"))
+
     # display summary
-    display_batch_summary(len(species_list), len(results), len(not_found))
+    display_batch_summary(
+        len(species_list), len(results), len(not_found), resolved_count
+    )
 
     # display successful results
     if results:
         st.markdown("#### Found Publications")
         for info in results:
-            display_single_result(info)
+            display_enhanced_single_result(info)
 
     # display not found species
     if not_found:
@@ -503,14 +547,16 @@ def display_batch_results(
 
     # offer download of all results
     if results or not_found:
-        offer_batch_download(results, not_found, errors, len(species_list))
+        offer_enhanced_batch_download(
+            results, not_found, errors, len(species_list)
+        )
 
 
-def offer_batch_download(
+def offer_enhanced_batch_download(
     results: list[dict], not_found: list[str], errors: list[dict], total: int
 ):
     """
-    Provide download button for batch results.
+    Provide download button for enhanced batch results.
 
     Parameters
     ----------
@@ -523,6 +569,8 @@ def offer_batch_download(
     total : int
         Total species queried.
     """
+    resolved_count = sum(1 for r in results if r.get("original_reference"))
+
     download_data = {
         "found": results,
         "not_found": not_found,
@@ -535,6 +583,7 @@ def offer_batch_download(
             "found_count": len(results),
             "not_found_count": len(not_found),
             "error_count": len(errors),
+            "resolved_references": resolved_count,
         },
     }
 
@@ -543,107 +592,133 @@ def offer_batch_download(
         st.download_button(
             label="Download All Results as JSON",
             data=json.dumps(download_data, indent=2),
-            file_name="pbdb_results.json",
+            file_name="enhanced_pbdb_results.json",
             mime="application/json",
         )
     with col2:
         # format as text
-        text_lines = []
-        text_lines.append("PBDB PUBLICATION LOOKUP RESULTS")
-        text_lines.append("=" * 35)
-        text_lines.append(f"Total Queried: {total}")
-        text_lines.append(f"Found: {len(results)}")
-        text_lines.append(f"Not Found: {len(not_found)}")
-        text_lines.append(f"Errors: {len(errors)}")
-        text_lines.append("")
-
-        if results:
-            text_lines.append("FOUND PUBLICATIONS:")
-            text_lines.append("-" * 19)
-            for result in results:
-                text_lines.append(f"Organism: {result['organism']}")
-                text_lines.append(f"Author: {result['author']}")
-                text_lines.append(
-                    f"Year: {result.get('year', 'Not available')}"
-                )
-                text_lines.append(
-                    f"Full Reference: {result['full_reference']}"
-                )
-                text_lines.append("")
-
-        if not_found:
-            text_lines.append("NOT FOUND SPECIES:")
-            text_lines.append("-" * 18)
-            for species in not_found:
-                text_lines.append(f"- {species}")
-            text_lines.append("")
-
-        if errors:
-            text_lines.append("QUERY ERRORS:")
-            text_lines.append("-" * 13)
-            for error in errors:
-                text_lines.append(f"{error['organism']}: {error['error']}")
-            text_lines.append("")
-
-        text_content = "\n".join(text_lines)
-
+        text_content = format_batch_results_as_text(
+            results, not_found, errors, total, resolved_count
+        )
         st.download_button(
             label="Download All Results as Text",
             data=text_content,
-            file_name="pbdb_results.txt",
+            file_name="enhanced_pbdb_results.txt",
             mime="text/plain",
         )
+
+
+def format_batch_results_as_text(
+    results: list[dict],
+    not_found: list[str],
+    errors: list[dict],
+    total: int,
+    resolved_count: int,
+) -> str:
+    """
+    Format batch results as text.
+
+    Parameters
+    ----------
+    results : list[dict]
+        Successful results.
+    not_found : list[str]
+        Not found species.
+    errors : list[dict]
+        Error results.
+    total : int
+        Total queried.
+    resolved_count : int
+        Number of resolved references.
+
+    Returns
+    -------
+    str
+        Formatted text content.
+    """
+    text_lines = []
+    text_lines.append("ENHANCED PBDB PUBLICATION LOOKUP RESULTS")
+    text_lines.append("=" * 45)
+    text_lines.append(f"Total Queried: {total}")
+    text_lines.append(f"Found: {len(results)}")
+    text_lines.append(f"Not Found: {len(not_found)}")
+    text_lines.append(f"Errors: {len(errors)}")
+    text_lines.append(f"References Resolved: {resolved_count}")
+    text_lines.append("")
+
+    if results:
+        text_lines.append("FOUND PUBLICATIONS:")
+        text_lines.append("-" * 19)
+        for result in results:
+            text_lines.append(format_result_as_text(result))
+            text_lines.append("")
+
+    if not_found:
+        text_lines.append("NOT FOUND SPECIES:")
+        text_lines.append("-" * 18)
+        for species in not_found:
+            text_lines.append(f"- {species}")
+        text_lines.append("")
+
+    if errors:
+        text_lines.append("QUERY ERRORS:")
+        text_lines.append("-" * 13)
+        for error in errors:
+            text_lines.append(f"{error['organism']}: {error['error']}")
+        text_lines.append("")
+
+    return "\n".join(text_lines)
 
 
 def render_footer():
     """Render the application footer with information."""
     st.markdown("---")
-    st.markdown("### Notes")
+    st.markdown("### How This Works")
     st.markdown(
-        "This tool queries the "
-        "[Paleobiology Database](https://paleobiodb.org) "
-        "to retrieve original publication information for species.\n\n"
-        "The repository for this application can be found here: "
-        "<https://github.com/O957/fossil-species-references>.\n\n"
-        "The license for this application: "
-        "<https://github.com/O957/fossil-species-references/blob/main/LICENSE>"
+        "This application first queries the Paleobiology Database (PBDB) for species information. "
+        'When PBDB shows a taxonomic authority (like "Whitley 1939") but references a different paper '
+        "(like \"Sepkoski 2002\"), it indicates the original describing paper isn't in PBDB's database. "
+        "In these cases, our system automatically searches external sources—CrossRef for modern papers with DOIs, "
+        "Biodiversity Heritage Library for historical taxonomic literature, and World Register of Marine Species "
+        "for marine taxa—to locate and display the original publication where the species was first described, "
+        "providing researchers with access to the complete taxonomic citation history."
     )
+    st.markdown("---")
+    st.markdown("### About This Enhanced Version")
     st.markdown(
-        "**NOTE** A small delay is added between queries to be respectful "
-        "to the PBDB API."
-    )
-    st.markdown(
-        "__How may I contribute to this project?__\n"
-        "* Making an [issue]("
-        "https://github.com/O957/fossil-species-references/issues) (comment, "
-        "feature, bug) in this repository.\n"
-        "* Making a [pull request]("
-        "https://github.com/O957/fossil-species-references/pulls) to this "
-        "repository.\n"
-        "* Engaging in a [discussion thread]("
-        "https://github.com/O957/fossil-species-references/discussions) in "
-        "this repository.\n"
-        "* Contacting me via email: [my github username]+[@]+[pro]+[ton]+[.]+"
-        "[me]"
+        "The original application repository: "
+        "<https://github.com/O957/fossil-species-references>"
     )
 
 
-def render_main_tabs():
-    """Render the main tabbed interface."""
+def render_main_tabs(settings: dict):
+    """
+    Render the main tabbed interface.
+
+    Parameters
+    ----------
+    settings : dict
+        Application settings.
+    """
     tab1, tab2 = st.tabs(["Single Species", "Multiple Species (File Upload)"])
 
     with tab1:
-        render_single_species_tab()
+        render_single_species_tab(settings)
 
     with tab2:
-        render_file_upload_tab()
+        render_file_upload_tab(settings)
 
 
 def main():
     """Main application entry point."""
     configure_page()
     render_header()
-    render_main_tabs()
+
+    # render settings sidebar and get configuration
+    settings = render_settings_sidebar()
+
+    # render main interface
+    render_main_tabs(settings)
     render_footer()
 
 
