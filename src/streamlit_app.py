@@ -220,13 +220,27 @@ def handle_single_species_result(result: dict | None, species_input: str):
         st.success("Found publication information:")
         display_single_result(result)
 
-        # download option
-        st.download_button(
-            label="Download as JSON",
-            data=json.dumps(result, indent=2),
-            file_name=f"{species_input.replace(' ', '_')}.json",
-            mime="application/json",
-        )
+        # download options
+        col1, col2 = st.columns(2)
+        with col1:
+            st.download_button(
+                label="Download as JSON",
+                data=json.dumps(result, indent=2),
+                file_name=f"{species_input.replace(' ', '_')}.json",
+                mime="application/json",
+            )
+        with col2:
+            # format as text
+            text_content = f"""Organism: {result["organism"]}
+Author: {result["author"]}
+Year: {result.get("year", "Not available")}
+Full Reference: {result["full_reference"]}"""
+            st.download_button(
+                label="Download as Text",
+                data=text_content,
+                file_name=f"{species_input.replace(' ', '_')}.txt",
+                mime="text/plain",
+            )
 
 
 def parse_uploaded_file(uploaded_file) -> list[str]:
@@ -268,6 +282,30 @@ def render_file_upload_tab():
         type=["txt"],
         help="Upload a text file with one species name per line.",
     )
+
+    # example file content
+    with st.expander("📋 Example File Format"):
+        st.markdown("**Copy this example content to create your own file:**")
+        example_content = """# Example fossil species list
+# Lines starting with # are ignored as comments
+Tyrannosaurus rex
+Triceratops horridus
+Allosaurus fragilis
+Stegosaurus stenops
+Brontosaurus excelsus
+Diplodocus carnegii
+Archaeopteryx lithographica
+Ichthyosaurus communis
+Plesiosaaurus dolichodeirus
+Ammonites bisulcatus"""
+        st.code(example_content, language="text")
+        st.download_button(
+            label="📥 Download Example File",
+            data=example_content,
+            file_name="example_species_list.txt",
+            mime="text/plain",
+            help="Download this example as a text file",
+        )
 
     if uploaded_file is not None:
         species_list = parse_uploaded_file(uploaded_file)
@@ -406,26 +444,93 @@ def offer_batch_download(
         },
     }
 
-    st.download_button(
-        label="Download All Results as JSON",
-        data=json.dumps(download_data, indent=2),
-        file_name="pbdb_results.json",
-        mime="application/json",
-    )
+    col1, col2 = st.columns(2)
+    with col1:
+        st.download_button(
+            label="Download All Results as JSON",
+            data=json.dumps(download_data, indent=2),
+            file_name="pbdb_results.json",
+            mime="application/json",
+        )
+    with col2:
+        # format as text
+        text_lines = []
+        text_lines.append("PBDB PUBLICATION LOOKUP RESULTS")
+        text_lines.append("=" * 35)
+        text_lines.append(f"Total Queried: {total}")
+        text_lines.append(f"Found: {len(results)}")
+        text_lines.append(f"Not Found: {len(not_found)}")
+        text_lines.append(f"Errors: {len(errors)}")
+        text_lines.append("")
+
+        if results:
+            text_lines.append("FOUND PUBLICATIONS:")
+            text_lines.append("-" * 19)
+            for result in results:
+                text_lines.append(f"Organism: {result['organism']}")
+                text_lines.append(f"Author: {result['author']}")
+                text_lines.append(
+                    f"Year: {result.get('year', 'Not available')}"
+                )
+                text_lines.append(
+                    f"Full Reference: {result['full_reference']}"
+                )
+                text_lines.append("")
+
+        if not_found:
+            text_lines.append("NOT FOUND SPECIES:")
+            text_lines.append("-" * 18)
+            for species in not_found:
+                text_lines.append(f"- {species}")
+            text_lines.append("")
+
+        if errors:
+            text_lines.append("QUERY ERRORS:")
+            text_lines.append("-" * 13)
+            for error in errors:
+                text_lines.append(f"{error['organism']}: {error['error']}")
+            text_lines.append("")
+
+        text_content = "\n".join(text_lines)
+
+        st.download_button(
+            label="Download All Results as Text",
+            data=text_content,
+            file_name="pbdb_results.txt",
+            mime="text/plain",
+        )
 
 
 def render_footer():
     """Render the application footer with information."""
     st.markdown("---")
-    st.markdown("### About")
+    st.markdown("### Notes")
     st.markdown(
         "This tool queries the "
         "[Paleobiology Database](https://paleobiodb.org) "
-        "to retrieve original publication information for species."
+        "to retrieve original publication information for species.\n\n"
+        "The repository for this application can be found here: "
+        "<https://github.com/O957/fossil-species-references>.\n\n"
+        "The license for this application: "
+        "<https://github.com/O957/fossil-species-references/blob/main/LICENSE>"
     )
     st.markdown(
-        "**Note:** A small delay is added between queries to be respectful "
+        "**NOTE** A small delay is added between queries to be respectful "
         "to the PBDB API."
+    )
+    st.markdown(
+        "__How may I contribute to this project?__\n"
+        "* Making an [issue]("
+        "https://github.com/O957/fossil-species-references/issues) (comment, "
+        "feature, bug) in this repository.\n"
+        "* Making a [pull request]("
+        "https://github.com/O957/fossil-species-references/pulls) to this "
+        "repository\n."
+        "* Engaging in a [discussion thread]("
+        "https://github.com/O957/fossil-species-references/discussions) in "
+        "this repository.\n"
+        "* Contacting me via email: [my github username]+[@]+[pro]+[ton]+[.]+"
+        "[me]"
     )
 
 
