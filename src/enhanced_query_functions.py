@@ -8,11 +8,7 @@ import json
 import sys
 import time
 
-import requests
 
-from config_loader import (
-    NOT_AVAILABLE,
-)
 from local_data_query import query_pbdb_local
 from pbdb_publication_lookup import (
     normalize_taxonomic_authority,
@@ -100,9 +96,7 @@ def enhanced_query_pbdb(
 
                 # if there's a mismatch, mark it as the original reference too
                 if result.get("attribution_mismatch"):
-                    result["original_reference"] = result[
-                        "external_reference"
-                    ]
+                    result["original_reference"] = result["external_reference"]
             else:
                 # external reference doesn't match PBDB reference, don't show it
                 result["external_reference"] = None

@@ -24,7 +24,11 @@ def load_pbdb_data() -> pl.DataFrame:
     """
     global _cached_df
     if _cached_df is None:
-        data_path = Path(__file__).parent.parent / "data" / "pbdb_essential_taxonomy_with_refs.parquet"
+        data_path = (
+            Path(__file__).parent.parent
+            / "data"
+            / "pbdb_essential_taxonomy_with_refs.parquet"
+        )
         _cached_df = pl.read_parquet(str(data_path))
     return _cached_df
 
@@ -77,9 +81,16 @@ def extract_year_from_ref(ref_text: str) -> str:
     for word in words:
         # clean word of punctuation and check if it's a valid year
         clean_word = word.strip(".,();:-")
-        if (clean_word.isdigit() and len(clean_word) == 4 and
-            (clean_word.startswith("17") or clean_word.startswith("18") or
-             clean_word.startswith("19") or clean_word.startswith("20"))):
+        if (
+            clean_word.isdigit()
+            and len(clean_word) == 4
+            and (
+                clean_word.startswith("17")
+                or clean_word.startswith("18")
+                or clean_word.startswith("19")
+                or clean_word.startswith("20")
+            )
+        ):
             year_num = int(clean_word)
             if 1700 <= year_num <= 2029:
                 return clean_word
@@ -129,9 +140,21 @@ def query_pbdb_local(organism_name: str) -> dict | None:
         record = result[0].to_dict()
 
         # convert to expected format
-        nam = record.get("nam", [organism_name])[0] if "nam" in record else organism_name
-        att = record.get("att", [NOT_AVAILABLE])[0] if "att" in record else NOT_AVAILABLE
-        ref = record.get("ref", [NOT_AVAILABLE])[0] if "ref" in record else NOT_AVAILABLE
+        nam = (
+            record.get("nam", [organism_name])[0]
+            if "nam" in record
+            else organism_name
+        )
+        att = (
+            record.get("att", [NOT_AVAILABLE])[0]
+            if "att" in record
+            else NOT_AVAILABLE
+        )
+        ref = (
+            record.get("ref", [NOT_AVAILABLE])[0]
+            if "ref" in record
+            else NOT_AVAILABLE
+        )
 
         # handle null values from parquet
         if att == "null" or att is None:
@@ -148,11 +171,14 @@ def query_pbdb_local(organism_name: str) -> dict | None:
             "att": att,
             "ref": ref,
             "aut": ref_author,  # author from reference
-            "pby": ref_year,    # publication year from reference
+            "pby": ref_year,  # publication year from reference
         }
 
     except Exception as e:
-        return {"error": f"Local data query error: {e}", "organism": organism_name}
+        return {
+            "error": f"Local data query error: {e}",
+            "organism": organism_name,
+        }
 
 
 def query_multiple_species_local(

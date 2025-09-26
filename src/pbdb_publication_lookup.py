@@ -13,7 +13,6 @@ import sys
 from pathlib import Path
 from time import sleep
 
-import requests
 
 from config_loader import (
     API_DELAY,
@@ -73,9 +72,7 @@ def extract_year_from_attribution(attribution: str) -> str | None:
     return None
 
 
-def check_attribution_mismatch(
-    attribution: str, pbdb_reference: str
-) -> bool:
+def check_attribution_mismatch(attribution: str, pbdb_reference: str) -> bool:
     """
     Check if taxonomic attribution matches the PBDB reference.
 

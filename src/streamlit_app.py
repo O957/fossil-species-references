@@ -14,7 +14,6 @@ import streamlit as st
 # import our enhanced functions
 from enhanced_query_functions import (
     enhanced_query_pbdb,
-    query_multiple_species_enhanced,
 )
 from pbdb_publication_lookup import normalize_taxonomic_authority
 
@@ -193,7 +192,9 @@ def render_single_species_tab(settings: dict):
         )
 
     if search_button and species_input:
-        with st.spinner("Searching local PBDB dataset and resolving references..."):
+        with st.spinner(
+            "Searching local PBDB dataset and resolving references..."
+        ):
             result = enhanced_query_pbdb(
                 species_input,
                 resolve_missing=settings["enable_resolution"],
@@ -220,7 +221,9 @@ def handle_single_species_result(
     """
     if "error" in result:
         if "No records found" in result["error"]:
-            st.error(f"No publication information found for '{species_input}' in local PBDB dataset")
+            st.error(
+                f"No publication information found for '{species_input}' in local PBDB dataset"
+            )
             st.info(
                 "Possible reasons:\n"
                 "- The species name may be spelled differently\n"
@@ -711,7 +714,7 @@ def render_footer():
     st.markdown(
         "This application searches a local PBDB dataset (parquet file with ~450K records) for species information. "
         'When the data shows a taxonomic authority (like "Whitley 1939") but references a different paper '
-        "(like \"Sepkoski 2002\"), it indicates the original describing paper isn't in the dataset. "
+        '(like "Sepkoski 2002"), it indicates the original describing paper isn\'t in the dataset. '
         "In these cases, our system automatically searches external online sources—CrossRef for modern papers with DOIs, "
         "Biodiversity Heritage Library for historical taxonomic literature, and World Register of Marine Species "
         "for marine taxa—to locate and display the original publication where the species was first described, "

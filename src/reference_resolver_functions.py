@@ -46,9 +46,16 @@ def extract_year_from_text(text: str) -> str | None:
     for word in words:
         # clean word of punctuation
         clean_word = word.strip(".,();:-")
-        if (clean_word.isdigit() and len(clean_word) == 4 and
-            (clean_word.startswith("17") or clean_word.startswith("18") or
-             clean_word.startswith("19") or clean_word.startswith("20"))):
+        if (
+            clean_word.isdigit()
+            and len(clean_word) == 4
+            and (
+                clean_word.startswith("17")
+                or clean_word.startswith("18")
+                or clean_word.startswith("19")
+                or clean_word.startswith("20")
+            )
+        ):
             year_num = int(clean_word)
             if 1700 <= year_num <= 2029:
                 return clean_word
@@ -102,9 +109,16 @@ def remove_year_from_authority(authority: str) -> str:
     for word in words:
         # skip if word is just a year
         clean_word = word.strip(".,();:-")
-        if (clean_word.isdigit() and len(clean_word) == 4 and
-            (clean_word.startswith("17") or clean_word.startswith("18") or
-             clean_word.startswith("19") or clean_word.startswith("20"))):
+        if (
+            clean_word.isdigit()
+            and len(clean_word) == 4
+            and (
+                clean_word.startswith("17")
+                or clean_word.startswith("18")
+                or clean_word.startswith("19")
+                or clean_word.startswith("20")
+            )
+        ):
             continue
         result_words.append(word)
 
@@ -204,9 +218,16 @@ def extract_title_from_pbdb_reference(pbdb_reference: str) -> str:
 
     for i, word in enumerate(words):
         clean_word = word.strip(".,();:-")
-        if (clean_word.isdigit() and len(clean_word) == 4 and
-            (clean_word.startswith("17") or clean_word.startswith("18") or
-             clean_word.startswith("19") or clean_word.startswith("20"))):
+        if (
+            clean_word.isdigit()
+            and len(clean_word) == 4
+            and (
+                clean_word.startswith("17")
+                or clean_word.startswith("18")
+                or clean_word.startswith("19")
+                or clean_word.startswith("20")
+            )
+        ):
             year_num = int(clean_word)
             if 1700 <= year_num <= 2029:
                 year_index = i
@@ -214,7 +235,7 @@ def extract_title_from_pbdb_reference(pbdb_reference: str) -> str:
 
     if year_index >= 0 and year_index < len(words) - 1:
         # get text after the year
-        after_year = " ".join(words[year_index + 1:])
+        after_year = " ".join(words[year_index + 1 :])
 
         # find the title part - typically ends at journal info (capital letter patterns)
         sentences = after_year.split(". ")
@@ -293,7 +314,9 @@ def search_crossref_by_title(
                         # additional author validation if provided
                         if author_name:
                             authors = item.get("author", [])
-                            author_clean = clean_author_name(author_name).lower()
+                            author_clean = clean_author_name(
+                                author_name
+                            ).lower()
                             if not any(
                                 author_clean in auth.get("family", "").lower()
                                 for auth in authors
