@@ -17,11 +17,9 @@ import requests
 
 from config_loader import (
     API_DELAY,
-    DEFAULT_TIMEOUT,
     NOT_AVAILABLE,
-    PBDB_BASE_URL,
-    PBDB_HEADERS,
 )
+from local_data_query import query_pbdb_local
 
 DISPLAY_WIDTH = 80
 SEPARATOR = "=" * DISPLAY_WIDTH
@@ -153,7 +151,7 @@ def process_pbdb_record(record: dict, organism_name: str) -> dict:
 def query_pbdb(organism_name: str) -> dict | None:
     """
     Retrieve publication information for a given organism
-    from PBDB.
+    from local PBDB dataset (parquet file).
 
     Parameters
     ----------
@@ -166,28 +164,16 @@ def query_pbdb(organism_name: str) -> dict | None:
         Dictionary containing publication info, error info,
         or None if not found.
     """
-    params = {"name": organism_name, "show": "attr,ref,refattr,app"}
+    # use local data instead of API
+    record = query_pbdb_local(organism_name)
 
-    try:
-        response = requests.get(
-            f"{PBDB_BASE_URL}/taxa/list.json",
-            params=params,
-            headers=PBDB_HEADERS,
-            timeout=DEFAULT_TIMEOUT,
-        )
-        response.raise_for_status()
-        data = response.json()
+    if record is None:
+        return None
 
-        if not data.get("records"):
-            return None
+    if "error" in record:
+        return record
 
-        record = data["records"][0]
-        return process_pbdb_record(record, organism_name)
-
-    except requests.RequestException as e:
-        return {"error": f"Connection error: {e}", "organism": organism_name}
-    except json.JSONDecodeError as e:
-        return {"error": f"Parse error: {e}", "organism": organism_name}
+    return process_pbdb_record(record, organism_name)
 
 
 def query_multiple_species(

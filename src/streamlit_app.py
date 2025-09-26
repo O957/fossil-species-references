@@ -193,7 +193,7 @@ def render_single_species_tab(settings: dict):
         )
 
     if search_button and species_input:
-        with st.spinner("Querying PBDB and resolving references..."):
+        with st.spinner("Searching local PBDB dataset and resolving references..."):
             result = enhanced_query_pbdb(
                 species_input,
                 resolve_missing=settings["enable_resolution"],
@@ -220,11 +220,11 @@ def handle_single_species_result(
     """
     if "error" in result:
         if "No records found" in result["error"]:
-            st.error(f"No publication information found for '{species_input}'")
+            st.error(f"No publication information found for '{species_input}' in local PBDB dataset")
             st.info(
                 "Possible reasons:\n"
                 "- The species name may be spelled differently\n"
-                "- The species may not be in the database\n"
+                "- The species may not be in the local dataset\n"
                 "- Try searching without 'cf.' or other qualifiers"
             )
         else:
@@ -507,7 +507,7 @@ def display_batch_results(
 
     # display not found species
     if not_found:
-        st.markdown("#### Species Not Found in PBDB")
+        st.markdown("#### Species Not Found in Local PBDB Dataset")
         not_found_text = "\n".join([f"- {sp}" for sp in not_found])
         st.text(not_found_text)
 
@@ -647,10 +647,10 @@ def render_footer():
     st.markdown("---")
     st.markdown("### How This Works")
     st.markdown(
-        "This application first queries the Paleobiology Database (PBDB) for species information. "
-        'When PBDB shows a taxonomic authority (like "Whitley 1939") but references a different paper '
-        "(like \"Sepkoski 2002\"), it indicates the original describing paper isn't in PBDB's database. "
-        "In these cases, our system automatically searches external sources—CrossRef for modern papers with DOIs, "
+        "This application searches a local PBDB dataset (parquet file with ~450K records) for species information. "
+        'When the data shows a taxonomic authority (like "Whitley 1939") but references a different paper '
+        "(like \"Sepkoski 2002\"), it indicates the original describing paper isn't in the dataset. "
+        "In these cases, our system automatically searches external online sources—CrossRef for modern papers with DOIs, "
         "Biodiversity Heritage Library for historical taxonomic literature, and World Register of Marine Species "
         "for marine taxa—to locate and display the original publication where the species was first described, "
         "providing researchers with access to the complete taxonomic citation history."

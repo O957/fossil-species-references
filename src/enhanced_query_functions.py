@@ -11,10 +11,9 @@ import time
 import requests
 
 from config_loader import (
-    DEFAULT_TIMEOUT,
-    PBDB_BASE_URL,
-    PBDB_HEADERS,
+    NOT_AVAILABLE,
 )
+from local_data_query import query_pbdb_local
 from pbdb_publication_lookup import (
     normalize_taxonomic_authority,
     process_pbdb_record,
@@ -47,87 +46,73 @@ def enhanced_query_pbdb(
     Dict
         Enhanced result dictionary.
     """
-    # first, do the standard PBDB query
-    params = {"name": organism_name, "show": "attr,ref,refattr,app"}
+    # use local data instead of API
+    record = query_pbdb_local(organism_name)
 
-    try:
-        response = requests.get(
-            f"{PBDB_BASE_URL}/taxa/list.json",
-            params=params,
-            headers=PBDB_HEADERS,
-            timeout=DEFAULT_TIMEOUT,
-        )
-        response.raise_for_status()
-        data = response.json()
+    if record is None:
+        return {"error": "No records found", "organism": organism_name}
 
-        if not data.get("records"):
-            return {"error": "No records found", "organism": organism_name}
+    if "error" in record:
+        return record
 
-        record = data["records"][0]
+    # process the PBDB record as before
+    result = process_pbdb_record(record, organism_name)
 
-        # process the PBDB record as before
-        result = process_pbdb_record(record, organism_name)
+    # always attempt to find external links when resolution is enabled
+    if resolve_missing:
+        # choose search strategy based on whether there's a mismatch
+        if result.get("attribution_mismatch"):
+            # mismatch: search by author/year/taxon to find original paper
+            original_ref = resolve_reference(
+                taxon_name=organism_name,
+                authority=result["author"],
+                year=result["year"],
+                bhl_api_key=bhl_api_key,
+                use_cache=True,
+            )
+        else:
+            # no mismatch: search for the specific PBDB paper by title
+            original_ref = resolve_reference_by_title(
+                pbdb_reference=result["full_reference"],
+                authority=result["author"],
+                year=result["year"],
+                use_cache=True,
+            )
 
-        # always attempt to find external links when resolution is enabled
-        if resolve_missing:
-            # choose search strategy based on whether there's a mismatch
+        if original_ref:
+            # when searching by title (no mismatch), we expect a match
+            # when searching by author/taxon (mismatch), validate normally
             if result.get("attribution_mismatch"):
-                # mismatch: search by author/year/taxon to find original paper
-                original_ref = resolve_reference(
-                    taxon_name=organism_name,
-                    authority=result["author"],
-                    year=result["year"],
-                    bhl_api_key=bhl_api_key,
-                    use_cache=True,
-                )
-            else:
-                # no mismatch: search for the specific PBDB paper by title
-                original_ref = resolve_reference_by_title(
+                is_valid_match = validate_reference_match(
                     pbdb_reference=result["full_reference"],
-                    authority=result["author"],
-                    year=result["year"],
-                    use_cache=True,
+                    external_reference=original_ref,
+                    attribution_mismatch=True,  # always show for mismatches
+                )
+            else:
+                # title-based search, assume valid (we searched for this specific paper)
+                is_valid_match = True
+
+            if is_valid_match:
+                result["external_reference"] = original_ref
+                result["external_reference"]["formatted_citation"] = (
+                    format_reference_citation(original_ref)
                 )
 
-            if original_ref:
-                # when searching by title (no mismatch), we expect a match
-                # when searching by author/taxon (mismatch), validate normally
+                # if there's a mismatch, mark it as the original reference too
                 if result.get("attribution_mismatch"):
-                    is_valid_match = validate_reference_match(
-                        pbdb_reference=result["full_reference"],
-                        external_reference=original_ref,
-                        attribution_mismatch=True,  # always show for mismatches
-                    )
-                else:
-                    # title-based search, assume valid (we searched for this specific paper)
-                    is_valid_match = True
-
-                if is_valid_match:
-                    result["external_reference"] = original_ref
-                    result["external_reference"]["formatted_citation"] = (
-                        format_reference_citation(original_ref)
-                    )
-
-                    # if there's a mismatch, mark it as the original reference too
-                    if result.get("attribution_mismatch"):
-                        result["original_reference"] = result[
-                            "external_reference"
-                        ]
-                else:
-                    # external reference doesn't match PBDB reference, don't show it
-                    result["external_reference"] = None
-                    result["resolution_attempted"] = True
-                    result["validation_failed"] = True
+                    result["original_reference"] = result[
+                        "external_reference"
+                    ]
             else:
+                # external reference doesn't match PBDB reference, don't show it
                 result["external_reference"] = None
                 result["resolution_attempted"] = True
+                result["validation_failed"] = True
+        else:
+            result["external_reference"] = None
+            result["resolution_attempted"] = True
 
-        return result
-
-    except requests.RequestException as e:
-        return {"error": f"Connection error: {e}", "organism": organism_name}
-    except json.JSONDecodeError as e:
-        return {"error": f"Parse error: {e}", "organism": organism_name}
+    return result
 
 
 def display_enhanced_result(result: dict) -> str:

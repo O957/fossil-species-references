@@ -8,11 +8,7 @@ import json
 
 import requests
 
-from config_loader import (
-    DEFAULT_TIMEOUT,
-    PBDB_BASE_URL,
-    PBDB_HEADERS,
-)
+from local_data_query import query_pbdb_local
 from pbdb_publication_lookup import process_pbdb_record
 from reference_resolver import (
     format_reference_citation,
@@ -40,52 +36,38 @@ def enhanced_query_pbdb(
     Dict
         Enhanced result dictionary.
     """
-    # first, do the standard PBDB query
-    params = {"name": organism_name, "show": "attr,ref,refattr,app"}
+    # use local data instead of API
+    record = query_pbdb_local(organism_name)
 
-    try:
-        response = requests.get(
-            f"{PBDB_BASE_URL}/taxa/list.json",
-            params=params,
-            headers=PBDB_HEADERS,
-            timeout=DEFAULT_TIMEOUT,
+    if record is None:
+        return {"error": "No records found", "organism": organism_name}
+
+    if "error" in record:
+        return record
+
+    # process the PBDB record as before
+    result = process_pbdb_record(record, organism_name)
+
+    # if there's an attribution mismatch and resolution is enabled
+    if resolve_missing and result.get("attribution_mismatch"):
+        original_ref = resolve_reference_main(
+            taxon_name=organism_name,
+            authority=result["author"],
+            year=result["year"],
+            use_cache=True,
+            bhl_api_key=bhl_api_key,
         )
-        response.raise_for_status()
-        data = response.json()
 
-        if not data.get("records"):
-            return {"error": "No records found", "organism": organism_name}
-
-        record = data["records"][0]
-
-        # process the PBDB record as before
-        result = process_pbdb_record(record, organism_name)
-
-        # if there's an attribution mismatch and resolution is enabled
-        if resolve_missing and result.get("attribution_mismatch"):
-            original_ref = resolve_reference_main(
-                taxon_name=organism_name,
-                authority=result["author"],
-                year=result["year"],
-                use_cache=True,
-                bhl_api_key=bhl_api_key,
+        if original_ref:
+            result["original_reference"] = original_ref.copy()
+            result["original_reference"]["formatted_citation"] = format_reference_citation(
+                original_ref
             )
+        else:
+            result["original_reference"] = None
+            result["resolution_attempted"] = True
 
-            if original_ref:
-                result["original_reference"] = original_ref.copy()
-                result["original_reference"]["formatted_citation"] = format_reference_citation(
-                    original_ref
-                )
-            else:
-                result["original_reference"] = None
-                result["resolution_attempted"] = True
-
-        return result
-
-    except requests.RequestException as e:
-        return {"error": f"Connection error: {e}", "organism": organism_name}
-    except json.JSONDecodeError as e:
-        return {"error": f"Parse error: {e}", "organism": organism_name}
+    return result
 
 
 def display_enhanced_result(result: dict) -> str:
