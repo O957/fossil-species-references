@@ -13,15 +13,40 @@ import sys
 from pathlib import Path
 from time import sleep
 
-import requests
 
-PBDB_BASE_URL = "https://paleobiodb.org/data1.2"
-DEFAULT_TIMEOUT = 10
-NOT_AVAILABLE = "Not available"
+from config_loader import (
+    API_DELAY,
+    NOT_AVAILABLE,
+)
+from local_data_query import query_pbdb_local
+
 DISPLAY_WIDTH = 80
-API_DELAY = 0.1  # seconds between requests to be respectful to API
 SEPARATOR = "=" * DISPLAY_WIDTH
 SUBSEPARATOR = "-" * DISPLAY_WIDTH
+
+
+def normalize_taxonomic_authority(authority: str) -> str:
+    """
+    Normalize taxonomic authority to always have parentheses.
+
+    Parameters
+    ----------
+    authority : str
+        The taxonomic authority string.
+
+    Returns
+    -------
+    str
+        Normalized authority with parentheses.
+    """
+    if authority == NOT_AVAILABLE:
+        return authority
+
+    # remove existing parentheses and normalize
+    clean_authority = authority.replace("(", "").replace(")", "").strip()
+
+    # add parentheses
+    return f"({clean_authority})"
 
 
 def extract_year_from_attribution(attribution: str) -> str | None:
@@ -47,37 +72,40 @@ def extract_year_from_attribution(attribution: str) -> str | None:
     return None
 
 
-def check_attribution_mismatch(
-    attribution: str, ref_author: str, ref_year: str
-) -> bool:
+def check_attribution_mismatch(attribution: str, pbdb_reference: str) -> bool:
     """
-    Check if taxonomic attribution matches the reference.
+    Check if taxonomic attribution matches the PBDB reference.
 
     Parameters
     ----------
     attribution : str
         The taxonomic attribution (e.g., "Whitley 1939").
-    ref_author : str
-        The reference author.
-    ref_year : str
-        The reference year.
+    pbdb_reference : str
+        The full PBDB reference text.
 
     Returns
     -------
     bool
         True if there's a mismatch, False otherwise.
     """
-    if attribution == NOT_AVAILABLE or ref_author == NOT_AVAILABLE:
+    if attribution == NOT_AVAILABLE or not pbdb_reference:
         return False
 
-    # clean up attribution for comparison
-    att_clean = attribution.replace("(", "").replace(")", "").lower()
-    ref_combined = f"{ref_author} {ref_year}".lower()
+    # clean up attribution - remove parentheses
+    att_clean = attribution.replace("(", "").replace(")", "").strip()
+    pbdb_lower = pbdb_reference.lower()
 
-    # check if they don't match
-    return att_clean not in ref_combined and not ref_combined.startswith(
-        att_clean.split()[0]
-    )
+    # extract author and year from attribution
+    att_parts = att_clean.split()
+    if not att_parts:
+        return False
+
+    # check if both author and year appear in PBDB reference
+    for part in att_parts:
+        if part.lower() not in pbdb_lower:
+            return True  # mismatch if any part is missing
+
+    return False  # no mismatch if all parts found
 
 
 def process_pbdb_record(record: dict, organism_name: str) -> dict:
@@ -107,15 +135,14 @@ def process_pbdb_record(record: dict, organism_name: str) -> dict:
     year = extract_year_from_attribution(author)
 
     # check if attribution matches reference
-    attribution_mismatch = check_attribution_mismatch(
-        author, ref_author, ref_year
-    )
+    full_reference = record.get("ref", NOT_AVAILABLE)
+    attribution_mismatch = check_attribution_mismatch(author, full_reference)
 
     return {
         "organism": record.get("nam", organism_name),
         "author": author,
         "year": year,
-        "full_reference": record.get("ref", NOT_AVAILABLE),
+        "full_reference": full_reference,
         "attribution_mismatch": attribution_mismatch,
         "ref_author": ref_author,
         "ref_year": ref_year,
@@ -125,7 +152,7 @@ def process_pbdb_record(record: dict, organism_name: str) -> dict:
 def query_pbdb(organism_name: str) -> dict | None:
     """
     Retrieve publication information for a given organism
-    from PBDB.
+    from local PBDB dataset (parquet file).
 
     Parameters
     ----------
@@ -138,27 +165,16 @@ def query_pbdb(organism_name: str) -> dict | None:
         Dictionary containing publication info, error info,
         or None if not found.
     """
-    params = {"name": organism_name, "show": "attr,ref,refattr,app"}
+    # use local data instead of API
+    record = query_pbdb_local(organism_name)
 
-    try:
-        response = requests.get(
-            f"{PBDB_BASE_URL}/taxa/list.json",
-            params=params,
-            timeout=DEFAULT_TIMEOUT,
-        )
-        response.raise_for_status()
-        data = response.json()
+    if record is None:
+        return None
 
-        if not data.get("records"):
-            return None
+    if "error" in record:
+        return record
 
-        record = data["records"][0]
-        return process_pbdb_record(record, organism_name)
-
-    except requests.RequestException as e:
-        return {"error": f"Connection error: {e}", "organism": organism_name}
-    except json.JSONDecodeError as e:
-        return {"error": f"Parse error: {e}", "organism": organism_name}
+    return process_pbdb_record(record, organism_name)
 
 
 def query_multiple_species(
@@ -260,7 +276,7 @@ def format_single_result(info: dict) -> str:
     """
     lines = [
         f"\nOrganism: {info['organism']}",
-        f"Taxonomic Authority: {info['author']}",
+        f"Taxonomic Authority: {normalize_taxonomic_authority(info['author'])}",
     ]
 
     if info["year"]:

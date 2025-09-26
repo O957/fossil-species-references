@@ -33,7 +33,7 @@ __What is in this repository?__
   * A project roadmap for this repository (see [here](https://github.com/O957/fossil-species-references/blob/main/assets/misc/roadmap.md)).
 * The folder `src` contains:
   * The standalone species reference finder script `pbdb_publication_lookup.py` (see [here](https://github.com/O957/fossil-species-references/blob/main/src/pbdb_publication_lookup.py)).
-  * The `streamlit` application (which is hosted publicly but can also be locally served) (see [here](https://github.com/O957/fossil-species-references/blob/main/src/streamlit_app.py)).
+  * Enhanced query modules with reference resolution capabilities.
 
 ## Usage
 
@@ -54,7 +54,7 @@ For (1):
 * `git clone https://github.com/O957/fossil-species-references.git`
 * `cd fossil-species-references`
 * `cd src`
-* `uv run streamlit run streamlit_app.py`
+* `python3 pbdb_publication_lookup.py "Species name"` or `python3 pbdb_publication_lookup.py -f species_list.txt`
 
 For (2):
 
