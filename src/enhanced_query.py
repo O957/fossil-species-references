@@ -15,8 +15,8 @@ from config_loader import (
 )
 from pbdb_publication_lookup import process_pbdb_record
 from reference_resolver import (
-    ReferenceResolver,
     format_reference_citation,
+    resolve_reference_main,
 )
 
 
@@ -63,32 +63,19 @@ def enhanced_query_pbdb(
 
         # if there's an attribution mismatch and resolution is enabled
         if resolve_missing and result.get("attribution_mismatch"):
-            resolver = ReferenceResolver(
-                use_cache=True, bhl_api_key=bhl_api_key
-            )
-
-            original_ref = resolver.resolve(
+            original_ref = resolve_reference_main(
                 taxon_name=organism_name,
                 authority=result["author"],
                 year=result["year"],
+                use_cache=True,
+                bhl_api_key=bhl_api_key,
             )
 
             if original_ref:
-                result["original_reference"] = {
-                    "title": original_ref.title,
-                    "authors": original_ref.authors,
-                    "year": original_ref.year,
-                    "journal": original_ref.journal,
-                    "volume": original_ref.volume,
-                    "pages": original_ref.pages,
-                    "doi": original_ref.doi,
-                    "url": original_ref.url,
-                    "source": original_ref.source,
-                    "confidence": original_ref.confidence,
-                    "formatted_citation": format_reference_citation(
-                        original_ref
-                    ),
-                }
+                result["original_reference"] = original_ref.copy()
+                result["original_reference"]["formatted_citation"] = format_reference_citation(
+                    original_ref
+                )
             else:
                 result["original_reference"] = None
                 result["resolution_attempted"] = True
