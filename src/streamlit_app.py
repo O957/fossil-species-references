@@ -408,6 +408,69 @@ Allosaurus fragilis"""
             st.warning("No valid species names found in file.")
 
 
+def query_multiple_species_with_progress(
+    species_list: list[str],
+    resolve_missing: bool = True,
+    bhl_api_key: str = None,
+) -> tuple[list[dict], list[str], list[dict]]:
+    """
+    Query multiple species with Streamlit progress bar.
+
+    Parameters
+    ----------
+    species_list : list[str]
+        List of species names to query.
+    resolve_missing : bool
+        Whether to resolve missing references.
+    bhl_api_key : str
+        Optional BHL API key.
+
+    Returns
+    -------
+    tuple[list[dict], list[str], list[dict]]
+        (successful_results, not_found_species, error_results)
+    """
+    import time
+
+    results = []
+    not_found = []
+    errors = []
+
+    # create progress bar
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+
+    total = len(species_list)
+
+    for i, species in enumerate(species_list):
+        # update progress
+        progress = (i + 1) / total
+        progress_bar.progress(progress)
+        status_text.text(f"Searching {i + 1}/{total}: {species}")
+
+        # rate limiting (small delay between requests)
+        if i > 0:
+            time.sleep(0.3)
+
+        # query the species
+        info = enhanced_query_pbdb(
+            species.strip(), resolve_missing, bhl_api_key
+        )
+
+        if info is None:
+            not_found.append(species)
+        elif "error" in info:
+            errors.append(info)
+        else:
+            results.append(info)
+
+    # clear progress indicators
+    progress_bar.empty()
+    status_text.text(f"✅ Completed search for {total} species")
+
+    return results, not_found, errors
+
+
 def handle_uploaded_species_list(species_list: list[str], settings: dict):
     """
     Handle processing of uploaded species list.
@@ -431,12 +494,11 @@ def handle_uploaded_species_list(species_list: list[str], settings: dict):
         st.markdown("---")
         st.markdown("### Results")
 
-        # query all species with enhanced resolution
-        results, not_found, errors = query_multiple_species_enhanced(
+        # query all species with enhanced resolution and progress bar
+        results, not_found, errors = query_multiple_species_with_progress(
             species_list,
             resolve_missing=settings["enable_resolution"],
             bhl_api_key=settings["bhl_api_key"],
-            show_progress=False,  # streamlit will show progress
         )
 
         # display results

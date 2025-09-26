@@ -7,7 +7,6 @@ approach.
 """
 
 import json
-import re
 from pathlib import Path
 
 import requests
@@ -24,6 +23,92 @@ from config_loader import (
 # cache configuration
 CACHE_DIR = Path.home() / CACHE_DIR_NAME / CACHE_SUBDIR_NAME
 CACHE_FILE = CACHE_DIR / CACHE_FILE_NAME
+
+
+def extract_year_from_text(text: str) -> str | None:
+    """
+    Extract 4-digit year from text without regex.
+
+    Parameters
+    ----------
+    text : str
+        Text to search for year.
+
+    Returns
+    -------
+    str | None
+        Year if found, None otherwise.
+    """
+    if not text:
+        return None
+
+    words = text.split()
+    for word in words:
+        # clean word of punctuation
+        clean_word = word.strip(".,();:-")
+        if (clean_word.isdigit() and len(clean_word) == 4 and
+            (clean_word.startswith("17") or clean_word.startswith("18") or
+             clean_word.startswith("19") or clean_word.startswith("20"))):
+            year_num = int(clean_word)
+            if 1700 <= year_num <= 2029:
+                return clean_word
+    return None
+
+
+def clean_author_name(author_name: str) -> str:
+    """
+    Clean author name by removing parentheses and digits.
+
+    Parameters
+    ----------
+    author_name : str
+        Author name to clean.
+
+    Returns
+    -------
+    str
+        Cleaned author name.
+    """
+    if not author_name:
+        return ""
+
+    # remove parentheses and digits
+    result = ""
+    for char in author_name:
+        if char not in "()0123456789":
+            result += char
+    return result.strip()
+
+
+def remove_year_from_authority(authority: str) -> str:
+    """
+    Remove 4-digit year from authority string.
+
+    Parameters
+    ----------
+    authority : str
+        Authority string.
+
+    Returns
+    -------
+    str
+        Authority without year.
+    """
+    if not authority:
+        return ""
+
+    words = authority.split()
+    result_words = []
+    for word in words:
+        # skip if word is just a year
+        clean_word = word.strip(".,();:-")
+        if (clean_word.isdigit() and len(clean_word) == 4 and
+            (clean_word.startswith("17") or clean_word.startswith("18") or
+             clean_word.startswith("19") or clean_word.startswith("20"))):
+            continue
+        result_words.append(word)
+
+    return " ".join(result_words).strip()
 
 
 def load_reference_cache() -> dict:
@@ -110,19 +195,34 @@ def extract_title_from_pbdb_reference(pbdb_reference: str) -> str:
     # typical PBDB format: "Author. Year. Title. Journal info"
     # but sometimes: "Author Year. Title. Journal info"
 
-    # find the year pattern and extract title after it
-    year_pattern = (
-        r"(\d{4})\.\s*(.+?)(?:\.\s*[A-Z][^.]*|\s+\d+:|\s+\d+\(\d+\)|$)"
-    )
-    match = re.search(year_pattern, pbdb_reference)
+    if not pbdb_reference:
+        return ""
 
-    if match:
-        title_part = match.group(2).strip()
-        # clean up common title endings
-        title_part = title_part.replace(" /", "").strip()
-        # remove trailing periods
-        title_part = title_part.rstrip(".")
-        return title_part
+    # find year in the text and extract everything after it as potential title
+    words = pbdb_reference.split()
+    year_index = -1
+
+    for i, word in enumerate(words):
+        clean_word = word.strip(".,();:-")
+        if (clean_word.isdigit() and len(clean_word) == 4 and
+            (clean_word.startswith("17") or clean_word.startswith("18") or
+             clean_word.startswith("19") or clean_word.startswith("20"))):
+            year_num = int(clean_word)
+            if 1700 <= year_num <= 2029:
+                year_index = i
+                break
+
+    if year_index >= 0 and year_index < len(words) - 1:
+        # get text after the year
+        after_year = " ".join(words[year_index + 1:])
+
+        # find the title part - typically ends at journal info (capital letter patterns)
+        sentences = after_year.split(". ")
+        if sentences:
+            title_part = sentences[0].strip()
+            # clean up common title endings
+            title_part = title_part.replace(" /", "").strip().rstrip(".")
+            return title_part
 
     # fallback: try simple split approach
     parts = pbdb_reference.split(". ")
@@ -179,48 +279,21 @@ def search_crossref_by_title(
                 item_title = (item.get("title", [""])[0] or "").lower()
                 search_title = title_clean.lower()
 
-                # check for title similarity - be more flexible with case and partial matches
-                # normalize both titles for comparison
-                search_words = set(search_title.replace("-", " ").split())
-                item_words = set(item_title.replace("-", " ").split())
+                # simple word percentage matching
+                search_words = set(search_title.split())
+                item_words = set(item_title.split())
 
-                # remove very common words
-                common = {
-                    "the",
-                    "a",
-                    "an",
-                    "of",
-                    "in",
-                    "on",
-                    "and",
-                    "or",
-                    "for",
-                    "from",
-                    "to",
-                    "by",
-                    "with",
-                }
-                search_words = {
-                    w for w in search_words if w not in common and len(w) > 2
-                }
-                item_words = {
-                    w for w in item_words if w not in common and len(w) > 2
-                }
-
-                # check if significant overlap exists
+                # calculate percentage match
                 if search_words and item_words:
                     overlap = len(search_words & item_words)
-                    if overlap >= min(
-                        3, len(search_words) * 0.5
-                    ):  # at least 3 words or 50% match
+                    match_percentage = overlap / len(search_words)
+
+                    # require at least 60% word match
+                    if match_percentage >= 0.6:
                         # additional author validation if provided
                         if author_name:
                             authors = item.get("author", [])
-                            author_clean = (
-                                re.sub(r"[()0-9]", "", author_name)
-                                .strip()
-                                .lower()
-                            )
+                            author_clean = clean_author_name(author_name).lower()
                             if not any(
                                 author_clean in auth.get("family", "").lower()
                                 for auth in authors
@@ -274,7 +347,7 @@ def search_crossref(
         Reference data if found, None otherwise.
     """
     # clean author name (remove parentheses, year if present)
-    author_clean = re.sub(r"[()0-9]", "", author_name).strip()
+    author_clean = clean_author_name(author_name)
 
     # build query
     query_parts = [author_clean]
@@ -348,7 +421,7 @@ def search_bhl(
     Optional[dict]
         Reference data if found, None otherwise.
     """
-    author_clean = re.sub(r"[()0-9]", "", author_name).strip()
+    author_clean = clean_author_name(author_name)
 
     params = {
         "op": "PublicationSearch",
@@ -414,8 +487,7 @@ def search_worms(taxon_name: str) -> dict | None:
             authority = records[0].get("authority", "")
 
             # parse authority for year
-            year_match = re.search(r"\b(1[789]\d{2}|20[012]\d)\b", authority)
-            year = year_match.group(1) if year_match else None
+            year = extract_year_from_text(authority)
 
             # get detailed record
             detail_response = requests.get(
@@ -518,11 +590,10 @@ def resolve_reference_by_title(
 
     # extract year if not provided
     if not year:
-        year_match = re.search(r"\b(1[789]\d{2}|20[012]\d)\b", authority)
-        year = year_match.group(1) if year_match else None
+        year = extract_year_from_text(authority)
 
     # extract author name (remove year and "et al.")
-    author_name = re.sub(r"\b\d{4}\b", "", authority).strip()
+    author_name = remove_year_from_authority(authority)
     author_name = author_name.replace("et al.", "").strip()
 
     # search CrossRef by title
@@ -574,14 +645,13 @@ def resolve_reference(
 
     # extract year if not provided
     if not year:
-        year_match = re.search(r"\b(1[789]\d{2}|20[012]\d)\b", authority)
-        year = year_match.group(1) if year_match else None
+        year = extract_year_from_text(authority)
 
     if not year:
         return None
 
     # extract author name (remove year and "et al.")
-    author_name = re.sub(r"\b\d{4}\b", "", authority).strip()
+    author_name = remove_year_from_authority(authority)
     author_name = author_name.replace("et al.", "").strip()
 
     # try different sources in order of preference
@@ -640,45 +710,24 @@ def validate_reference_match(
     ext_title = (external_reference.get("title") or "").lower()
     ext_journal = (external_reference.get("journal") or "").lower()
 
-    # check if external reference title appears in PBDB reference
-    if ext_title and len(ext_title.strip()) > 10:  # ignore very short titles
-        # remove common words and check for substantial overlap
+    # simple word percentage matching between external title and PBDB reference
+    if ext_title and len(ext_title.strip()) > 5:
         ext_title_words = set(ext_title.split())
         pbdb_words = set(pbdb_lower.split())
 
-        # remove common words
-        common_words = {
-            "the",
-            "a",
-            "an",
-            "of",
-            "in",
-            "on",
-            "and",
-            "or",
-            "for",
-            "with",
-            "by",
-        }
-        ext_title_words -= common_words
-        pbdb_words -= common_words
+        if ext_title_words and pbdb_words:
+            overlap = len(ext_title_words & pbdb_words)
+            match_percentage = overlap / len(ext_title_words)
 
-        # check for significant word overlap (at least 40% of title words)
-        if (
-            ext_title_words
-            and len(ext_title_words & pbdb_words) / len(ext_title_words) >= 0.4
-        ):
-            return True
+            # require at least 50% word match for validation
+            if match_percentage >= 0.5:
+                return True
 
     # check if journal names match
     if ext_journal and ext_journal in pbdb_lower:
         return True
 
-    # check if external title is contained in PBDB reference
-    if ext_title and ext_title in pbdb_lower:
-        return True
-
-    # if we can't validate the match, don't show it to avoid confusion
+    # if we can't validate the match, don't show it
     return False
 
 

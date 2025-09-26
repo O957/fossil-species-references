@@ -3,7 +3,6 @@ Local data query module for PBDB data from parquet file.
 This module replaces PBDB API calls with local data queries.
 """
 
-import re
 from pathlib import Path
 
 import polars as pl
@@ -74,9 +73,16 @@ def extract_year_from_ref(ref_text: str) -> str:
         return NOT_AVAILABLE
 
     # look for 4-digit year pattern
-    year_match = re.search(r"\b(1[789]\d{2}|20[012]\d)\b", ref_text)
-    if year_match:
-        return year_match.group(1)
+    words = ref_text.split()
+    for word in words:
+        # clean word of punctuation and check if it's a valid year
+        clean_word = word.strip(".,();:-")
+        if (clean_word.isdigit() and len(clean_word) == 4 and
+            (clean_word.startswith("17") or clean_word.startswith("18") or
+             clean_word.startswith("19") or clean_word.startswith("20"))):
+            year_num = int(clean_word)
+            if 1700 <= year_num <= 2029:
+                return clean_word
     return NOT_AVAILABLE
 
 

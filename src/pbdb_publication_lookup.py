@@ -74,36 +74,41 @@ def extract_year_from_attribution(attribution: str) -> str | None:
 
 
 def check_attribution_mismatch(
-    attribution: str, ref_author: str, ref_year: str
+    attribution: str, pbdb_reference: str
 ) -> bool:
     """
-    Check if taxonomic attribution matches the reference.
+    Check if taxonomic attribution matches the PBDB reference.
 
     Parameters
     ----------
     attribution : str
         The taxonomic attribution (e.g., "Whitley 1939").
-    ref_author : str
-        The reference author.
-    ref_year : str
-        The reference year.
+    pbdb_reference : str
+        The full PBDB reference text.
 
     Returns
     -------
     bool
         True if there's a mismatch, False otherwise.
     """
-    if attribution == NOT_AVAILABLE or ref_author == NOT_AVAILABLE:
+    if attribution == NOT_AVAILABLE or not pbdb_reference:
         return False
 
-    # clean up attribution for comparison
-    att_clean = attribution.replace("(", "").replace(")", "").lower()
-    ref_combined = f"{ref_author} {ref_year}".lower()
+    # clean up attribution - remove parentheses
+    att_clean = attribution.replace("(", "").replace(")", "").strip()
+    pbdb_lower = pbdb_reference.lower()
 
-    # check if they don't match
-    return att_clean not in ref_combined and not ref_combined.startswith(
-        att_clean.split()[0]
-    )
+    # extract author and year from attribution
+    att_parts = att_clean.split()
+    if not att_parts:
+        return False
+
+    # check if both author and year appear in PBDB reference
+    for part in att_parts:
+        if part.lower() not in pbdb_lower:
+            return True  # mismatch if any part is missing
+
+    return False  # no mismatch if all parts found
 
 
 def process_pbdb_record(record: dict, organism_name: str) -> dict:
@@ -133,15 +138,14 @@ def process_pbdb_record(record: dict, organism_name: str) -> dict:
     year = extract_year_from_attribution(author)
 
     # check if attribution matches reference
-    attribution_mismatch = check_attribution_mismatch(
-        author, ref_author, ref_year
-    )
+    full_reference = record.get("ref", NOT_AVAILABLE)
+    attribution_mismatch = check_attribution_mismatch(author, full_reference)
 
     return {
         "organism": record.get("nam", organism_name),
         "author": author,
         "year": year,
-        "full_reference": record.get("ref", NOT_AVAILABLE),
+        "full_reference": full_reference,
         "attribution_mismatch": attribution_mismatch,
         "ref_author": ref_author,
         "ref_year": ref_year,
