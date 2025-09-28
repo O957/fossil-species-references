@@ -1,5 +1,0 @@
-# Test species list
-Tyrannosaurus rex
-Squalicorax
-Enchodus petrosus
-Allosaurus fragilis
