@@ -270,7 +270,7 @@ def search_crossref_by_title(
         params["filter"] = f"from-pub-date:{year},until-pub-date:{year}"
 
     try:
-        response = requests.get(CROSSREF_BASE_URL, params=params, timeout=10)
+        response = requests.get(CROSSREF_BASE_URL, params=params, timeout=5)
         response.raise_for_status()
         data = response.json()
 
@@ -349,52 +349,106 @@ def search_crossref(
     # clean author name (remove parentheses, year if present)
     author_clean = clean_author_name(author_name)
 
-    # build query
-    query_parts = [author_clean]
+    # extract taxonomic name (could be genus, family, order, etc.)
+    taxon = None
     if taxon_name:
-        # add genus name for better matching
-        genus = taxon_name.split()[0] if " " in taxon_name else taxon_name
-        query_parts.append(genus)
+        # take the first word - could be genus, family, order, etc.
+        taxon = taxon_name.split()[0] if " " in taxon_name else taxon_name
+
+    # build query with author in quotes and taxonomic name for context
+    # the year filter is crucial to narrow down prolific authors
+    if taxon:
+        query = f'"{author_clean}" {taxon}'
+    else:
+        # if no taxon name, add paleontological context
+        query = f'"{author_clean}" fossil'
 
     params = {
-        "query": " ".join(query_parts),
+        "query": query,
         "filter": f"from-pub-date:{year},until-pub-date:{year}",
-        "rows": 5,
+        "rows": 25,  # get more results to find the right paper
     }
 
     try:
-        response = requests.get(CROSSREF_BASE_URL, params=params, timeout=10)
+        response = requests.get(CROSSREF_BASE_URL, params=params, timeout=5)
         response.raise_for_status()
         data = response.json()
 
         if data.get("message", {}).get("items"):
+            # score and rank results
+            scored_results = []
+
             for item in data["message"]["items"]:
-                # check if author matches
+                # check if author matches (must be exact match on family name)
                 authors = item.get("author", [])
-                if any(
-                    author_clean.lower() in auth.get("family", "").lower()
+                author_match = any(
+                    author_clean.lower() == auth.get("family", "").lower()
                     for auth in authors
-                ):
-                    return {
-                        "title": item.get("title", ["Unknown"])[0],
-                        "authors": [
-                            f"{a.get('given', '')} {a.get('family', '')}".strip()
-                            for a in authors
-                        ],
-                        "year": str(
-                            item.get("published-print", {}).get(
-                                "date-parts", [[year]]
-                            )[0][0]
-                        ),
-                        "journal": item.get("container-title", [""])[0]
-                        if item.get("container-title")
-                        else None,
-                        "volume": item.get("volume"),
-                        "pages": item.get("page"),
-                        "doi": item.get("DOI"),
-                        "url": item.get("URL"),
-                        "source": "CrossRef",
-                    }
+                )
+
+                if not author_match:
+                    continue  # skip if author doesn't match
+
+                # calculate relevance score
+                title = item.get("title", [""])[0].lower()
+                abstract = item.get("abstract", "").lower()
+                journal = item.get("container-title", [""])[0].lower()
+
+                score = 0
+
+                # boost score if taxonomic name appears in title/abstract
+                if taxon and taxon.lower() in f"{title} {abstract}":
+                    score += 10
+
+                # boost score for paleontological keywords
+                paleo_keywords = [
+                    "fossil", "cretaceous", "jurassic", "paleozoic", "mesozoic",
+                    "cenozoic", "paleontology", "geology", "formation", "fauna"
+                ]
+
+                for keyword in paleo_keywords:
+                    if keyword in f"{title} {abstract} {journal}":
+                        score += 2
+
+                # boost score for geological journals
+                geo_journals = [
+                    "journal of geology", "paleontology", "geological",
+                    "paleobiology", "bulletin", "american museum"
+                ]
+
+                for geo_journal in geo_journals:
+                    if geo_journal in journal:
+                        score += 5
+                        break
+
+                scored_results.append((score, item))
+
+            # sort by score (highest first) and return the best match
+            if scored_results:
+                scored_results.sort(key=lambda x: x[0], reverse=True)
+                best_item = scored_results[0][1]
+
+                return {
+                    "title": best_item.get("title", ["Unknown"])[0],
+                    "authors": [
+                        f"{a.get('given', '')} {a.get('family', '')}".strip()
+                        for a in best_item.get("author", [])
+                    ],
+                    "year": str(
+                        best_item.get("published-print", {}).get(
+                            "date-parts", [[year]]
+                        )[0][0]
+                    ),
+                    "journal": best_item.get("container-title", [""])[0]
+                    if best_item.get("container-title")
+                    else None,
+                    "volume": best_item.get("volume"),
+                    "pages": best_item.get("page"),
+                    "doi": best_item.get("DOI"),
+                    "url": best_item.get("URL"),
+                    "source": "CrossRef",
+                    "relevance_score": scored_results[0][0],  # for debugging
+                }
     except Exception as e:
         print(f"CrossRef search error: {e}")
 
@@ -434,7 +488,7 @@ def search_bhl(
 
     try:
         response = requests.get(
-            f"{BHL_BASE_URL}/query", params=params, timeout=10
+            f"{BHL_BASE_URL}/query", params=params, timeout=3
         )
         response.raise_for_status()
         data = response.json()
@@ -477,7 +531,7 @@ def search_worms(taxon_name: str) -> dict | None:
         # first, get the AphiaID for the taxon
         params = {"scientificname": taxon_name}
         response = requests.get(
-            f"{WORMS_BASE_URL}/AphiaRecordsByName", params=params, timeout=10
+            f"{WORMS_BASE_URL}/AphiaRecordsByName", params=params, timeout=3
         )
         response.raise_for_status()
         records = response.json()
@@ -491,7 +545,7 @@ def search_worms(taxon_name: str) -> dict | None:
 
             # get detailed record
             detail_response = requests.get(
-                f"{WORMS_BASE_URL}/AphiaRecordByAphiaID/{aphia_id}", timeout=10
+                f"{WORMS_BASE_URL}/AphiaRecordByAphiaID/{aphia_id}", timeout=3
             )
             detail_response.raise_for_status()
             detail = detail_response.json()

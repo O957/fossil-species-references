@@ -8,4 +8,5 @@ _This document captures resources such as links, quotes, or checklists relevant 
 * __Streamlit Theming__: <https://docs.streamlit.io/develop/concepts/configuration/theming>
 * __Streamlit Config For Themeing__: <https://docs.streamlit.io/develop/api-reference/configuration/config.toml#theme>
 * __Streamlit Cloud Hosting Page__: <https://share.streamlit.io/>
-* https://zenodo.org/records/17069880
+* __Zenodo Page For PBDB Dataset__: <https://zenodo.org/records/17069880>
+* __Search Page For CrossRef__: <https://search.crossref.org/>
