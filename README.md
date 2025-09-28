@@ -43,25 +43,25 @@ This repository supports:
 
 1. Using the online `streamlit` application hosted [here](https://fsr-pbdb.streamlit.app/).
 2. Locally hosting the `streamlit` application yourself.
-3. Using the command line script yourself.
+3. <del> Using the command line script yourself. </del>
 
-For (1) and (2):
+For (2) and <del>(3)</del>:
 
 * Head to <https://docs.astral.sh/uv/getting-started/installation/> to install UV.
-
-For (1):
-
-* `git clone https://github.com/O957/fossil-species-references.git`
-* `cd fossil-species-references`
-* `cd src`
-* `python3 pbdb_publication_lookup.py "Species name"` or `python3 pbdb_publication_lookup.py -f species_list.txt`
 
 For (2):
 
 * `git clone https://github.com/O957/fossil-species-references.git`
 * `cd fossil-species-references`
 * `cd src`
-* `uv run python3 pbdb_publication_lookup.py --help`
+* `uv run streamlit run ./src/streamlit_app.py`
+
+<!-- For (3):
+
+* `git clone https://github.com/O957/fossil-species-references.git`
+* `cd fossil-species-references`
+* `cd src`
+* `uv run python3 pbdb_publication_lookup.py --help` -->
 
 
 ## Contributing
