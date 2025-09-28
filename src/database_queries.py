@@ -377,35 +377,15 @@ def query_crossref(
         return None
 
     try:
-        # extract title from reference if it contains full citation
-        # e.g., "E. D. Cope. 1874. Review of the Vertebrata..." -> "Review of
-        # the Vertebrata..."
-        title = reference
-        if ". " in reference and reference[0].isupper():
-            # likely a full citation, extract title part
-            parts = reference.split(". ")
-            for i, part in enumerate(parts):
-                # title usually comes after year
-                if i > 0 and any(char.isdigit() for char in parts[i - 1]):
-                    # found likely title
-                    title = part
-                    # remove journal info if present
-                    if " in " in title.lower() or " of " in title.lower():
-                        title_parts = title.split(".")
-                        if title_parts:
-                            title = title_parts[0]
-                    break
-
-        # build query with just essential parts for old papers
+        # search for the complete reference as it appears, not extracted parts
+        # this ensures we find the exact paper that matches the displayed
+        # reference
         query_parts = []
 
-        # add title
-        if title:
-            # clean up title - remove publication details
-            clean_title = title.split(".")[0] if "." in title else title
-            query_parts.append(clean_title)
+        # use the full reference as the primary search term
+        query_parts.append(reference)
 
-        # add author and year for precision
+        # add author and year for additional precision if available
         if author and author != NOT_AVAILABLE:
             query_parts.append(author)
         if year:
@@ -428,22 +408,26 @@ def query_crossref(
         data = response.json()
 
         if data.get("message", {}).get("items"):
-            # find best match
+            # find best match by comparing the full reference with CrossRef
+            # results
             for item in data["message"]["items"]:
                 item_title = " ".join(item.get("title", []))
 
-                # for old papers, be more lenient with matching
-                title_lower = title.lower()
+                # compare the reference with the found paper title
+                reference_lower = reference.lower()
                 item_title_lower = item_title.lower()
 
-                # check various matching strategies
-                title_words = set(
-                    title_lower.split()[:5]
-                )  # first 5 words of title
+                # check if key words from the reference appear in the CrossRef
+                # result
+                reference_words = set(
+                    reference_lower.split()[:10]
+                )  # first 10 words
                 item_words = set(item_title_lower.split())
 
-                # if significant overlap in words, consider it a match
-                if len(title_words & item_words) >= min(3, len(title_words)):
+                # require significant overlap to ensure it's the same paper
+                if len(reference_words & item_words) >= min(
+                    5, len(reference_words)
+                ):
                     doi = item.get("DOI", NOT_AVAILABLE)
                     url = item.get("URL")
 
@@ -547,6 +531,10 @@ def search_taxonomy(species_name: str) -> dict[str, Any]:
                 # original references)
                 if source == "PBDB":
                     score += 1000
+
+                # deprioritize GBIF because they abbreviate references
+                if source == "GBIF":
+                    score -= 300  # penalize GBIF for abbreviated references
 
                 # prioritize sources that aren't modern database citations
                 ref_lower = ref.lower()

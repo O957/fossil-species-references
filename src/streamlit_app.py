@@ -340,14 +340,33 @@ def show_cache_view():
             doi = str(row["doi"] or "NA")
             if doi == "Not available":
                 doi = "NA"
-            doi = doi[:20] + "..." if len(doi) > 20 else doi
+            elif doi != "NA":
+                # make DOI clickable in markdown
+                doi_url = (
+                    f"https://doi.org/{doi}"
+                    if not doi.startswith("http")
+                    else doi
+                )
+                doi = (
+                    f"[{doi[:15]}...]({doi_url})"
+                    if len(doi) > 15
+                    else f"[{doi}]({doi_url})"
+                )
+            else:
+                doi = doi[:20] + "..." if len(doi) > 20 else doi
 
             paper_link = str(row["paper_link"] or "NA")
             if paper_link == "Not available":
                 paper_link = "NA"
-            paper_link = (
-                paper_link[:30] + "..." if len(paper_link) > 30 else paper_link
-            )
+            elif paper_link != "NA":
+                # make paper link clickable in markdown
+                paper_link = f"[🔗 Link]({paper_link})"
+            else:
+                paper_link = (
+                    paper_link[:30] + "..."
+                    if len(paper_link) > 30
+                    else paper_link
+                )
 
             source = str(row["source"] or "NA")
             if source == "Not available":
