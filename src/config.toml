@@ -1,0 +1,18 @@
+# Shared configuration for the fossil species references application
+
+[api]
+pbdb_base_url = "https://paleobiodb.org/data1.2"
+default_timeout = 10
+not_available = "Not available"
+api_delay = 0.1
+
+[external_apis]
+crossref_base_url = "https://api.crossref.org/works"
+bhl_base_url = "https://www.biodiversitylibrary.org/api3"
+worms_base_url = "https://www.marinespecies.org/rest"
+gbif_base_url = "https://api.gbif.org/v1"
+
+[cache]
+dir_name = ".cache"
+subdir_name = "fossil_references"
+file_name = "reference_cache.json"

@@ -1,603 +1,461 @@
 """
-Streamlit web application for PBDB Publication Lookup.
-This app allows users to query the Paleobiology Database
-for publication information about species, either
-individually or in batch from a file.
+Streamlit app for finding original taxonomic descriptions.
+Uses simplified cache-first approach with persistent parquet storage.
 """
 
-import json
-import time
-from io import StringIO
-
-import requests
+import polars as pl
 import streamlit as st
 
-PBDB_BASE_URL = "https://paleobiodb.org/data1.2"
-DEFAULT_TIMEOUT = 10
-NOT_AVAILABLE = "Not available"
-API_DELAY = 0.1
+from database_queries import search_taxonomy
+from taxonomy_cache import (
+    load_cache,
+    lookup_in_cache,
+    save_to_cache,
+)
 
 
 def configure_page():
-    """
-    Configure Streamlit page settings.
-    """
+    """Configure the Streamlit page settings."""
     st.set_page_config(
-        page_title="PBDB Publication Lookup", page_icon="📚", layout="wide"
+        page_title="Taxonomic Reference Finder",
+        layout="wide",
+        initial_sidebar_state="expanded",
     )
 
 
-def extract_year_from_attribution(attribution: str) -> str | None:
+def display_result(result: dict):
     """
-    Extract year from taxonomic attribution string.
+    Display search result in a clean format.
 
     Parameters
     ----------
-    attribution : str
-        The attribution string (e.g., "Cope 1874").
-
-    Returns
-    -------
-    str | None
-        The extracted year or None if not found.
+    result : dict
+        Result dictionary from search.
     """
-    if attribution == NOT_AVAILABLE:
-        return None
+    st.subheader(f"{result['search_term']}")
 
-    parts = attribution.split()
-    if parts and parts[-1].isdigit():
-        return parts[-1]
-    return None
+    # check for year mismatch warning
+    if result.get("year_mismatch", False):
+        st.warning(
+            "⚠️ **Year Mismatch Warning**: No reference found with matching "
+            "publication year. The reference may not be the original "
+            "taxonomic description."
+        )
+
+    # create two columns
+    col1, col2 = st.columns([2, 1])
+
+    with col1:
+        # main information
+        st.write(
+            "**Taxonomic Authority:**",
+            result["taxonomic_authority"]
+            if result["taxonomic_authority"] != "Not available"
+            else "NA",
+        )
+        st.write("**Year:**", result["year"] or "NA")
+        st.write(
+            "**Author:**",
+            result["author"] if result["author"] != "Not available" else "NA",
+        )
+
+        # reference with mismatch indicator
+        if result["reference"] != "Not available":
+            st.write("**Reference:**")
+            st.text(result["reference"])
+        elif result.get("year_mismatch", False):
+            st.write("**Reference:** ⚠️ No matching reference found")
+        else:
+            st.write("**Reference:** NA")
+
+    with col2:
+        # metadata
+        st.write("**Source:**", result["source"])
+        if result.get("from_cache"):
+            st.success("✅ From cache")
+        else:
+            st.info("🔍 Fresh search")
+
+        # year mismatch indicator in metadata
+        if result.get("year_mismatch", False):
+            st.error("⚠️ Year mismatch")
+
+        # links
+        if result["doi"] != "Not available":
+            st.write("**DOI:**", result["doi"])
+        else:
+            st.write("**DOI:** NA")
+
+        if result["paper_link"] != "Not available":
+            st.markdown(f"[📄 View Paper]({result['paper_link']})")
+        else:
+            st.write("**Paper Link:** NA")
 
 
-def check_attribution_mismatch(
-    attribution: str, ref_author: str, ref_year: str
-) -> bool:
+def search_species(species_name: str, use_cache: bool = True) -> dict:
     """
-    Check if taxonomic attribution matches the reference.
+    Search for species with cache-first approach.
 
     Parameters
     ----------
-    attribution : str
-        The taxonomic attribution (e.g., "Whitley 1939").
-    ref_author : str
-        The reference author.
-    ref_year : str
-        The reference year.
-
-    Returns
-    -------
-    bool
-        True if there's a mismatch, False otherwise.
-    """
-    if attribution == NOT_AVAILABLE or ref_author == NOT_AVAILABLE:
-        return False
-
-    # clean up attribution for comparison
-    att_clean = attribution.replace("(", "").replace(")", "").lower()
-    ref_combined = f"{ref_author} {ref_year}".lower()
-
-    # check if they don't match
-    return att_clean not in ref_combined and not ref_combined.startswith(
-        att_clean.split()[0]
-    )
-
-
-def process_pbdb_record(record: dict, organism_name: str) -> dict:
-    """
-    Process a PBDB record into standardized format.
-
-    Parameters
-    ----------
-    record : dict
-        The PBDB record.
-    organism_name : str
-        The original organism name queried.
+    species_name : str
+        Species name to search.
+    use_cache : bool
+        Whether to use cache.
 
     Returns
     -------
     dict
-        Processed publication information.
+        Search results.
     """
-    # taxonomic attribution (original author and year)
-    author = record.get("att", NOT_AVAILABLE)
+    # normalize search term
+    search_term = species_name.strip()
 
-    # reference author and year (may differ from attribution)
-    ref_author = record.get("aut", NOT_AVAILABLE)
-    ref_year = record.get("pby", NOT_AVAILABLE)
+    # check cache first
+    if use_cache:
+        cached = lookup_in_cache(search_term)
+        if cached:
+            cached["from_cache"] = True
+            return cached
 
-    # extract year from author attribution
-    year = extract_year_from_attribution(author)
+    # search databases
+    result = search_taxonomy(search_term)
+    result["from_cache"] = False
 
-    # check if attribution matches reference
-    attribution_mismatch = check_attribution_mismatch(
-        author, ref_author, ref_year
+    # only save to cache if we found some useful information
+    has_useful_info = (
+        result["taxonomic_authority"] != "Not available"
+        or result["reference"] != "Not available"
+        or (result["doi"] != "Not available" and result["doi"] is not None)
     )
 
-    return {
-        "organism": record.get("nam", organism_name),
-        "author": author,
-        "year": year,
-        "full_reference": record.get("ref", NOT_AVAILABLE),
-        "attribution_mismatch": attribution_mismatch,
-        "ref_author": ref_author,
-        "ref_year": ref_year,
-    }
+    if has_useful_info:
+        save_to_cache(result)
+
+    return result
 
 
-def query_pbdb(organism_name: str) -> dict | None:
-    """
-    Retrieve publication information for a given organism
-    from PBDB.
+def show_single_search():
+    """Show single species search interface."""
+    st.subheader("🔍 Single Species Search")
 
-    Parameters
-    ----------
-    organism_name : str
-        The scientific name of the organism to look up.
-
-    Returns
-    -------
-    dict | None
-        Dictionary containing publication info, error
-        info, or None if not found.
-    """
-    params = {"name": organism_name, "show": "attr,ref,refattr,app"}
-
-    try:
-        response = requests.get(
-            f"{PBDB_BASE_URL}/taxa/list.json",
-            params=params,
-            timeout=DEFAULT_TIMEOUT,
-        )
-        response.raise_for_status()
-        data = response.json()
-
-        if not data.get("records"):
-            return None
-
-        record = data["records"][0]
-        return process_pbdb_record(record, organism_name)
-
-    except requests.RequestException as e:
-        return {"error": f"Connection error: {e}", "organism": organism_name}
-    except json.JSONDecodeError as e:
-        return {"error": f"Parse error: {e}", "organism": organism_name}
-
-
-def query_multiple_species(
-    species_list: list[str],
-) -> tuple[list[dict], list[str], list[dict]]:
-    """
-    Query PBDB for multiple species.
-
-    Parameters
-    ----------
-    species_list : list[str]
-        List of species names to query.
-
-    Returns
-    -------
-    tuple[list[dict], list[str], list[dict]]
-        (successful_results, not_found_species, error_results)
-    """
-    results = []
-    not_found = []
-    errors = []
-
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-
-    for i, species in enumerate(species_list):
-        # update progress
-        progress = (i + 1) / len(species_list)
-        progress_bar.progress(progress)
-        status_text.text(f"Querying: {species} ({i + 1}/{len(species_list)})")
-
-        # rate limiting
-        if i > 0:
-            time.sleep(API_DELAY)
-
-        info = query_pbdb(species.strip())
-
-        if info is None:
-            not_found.append(species)
-        elif "error" in info:
-            errors.append(info)
-        else:
-            results.append(info)
-
-    progress_bar.empty()
-    status_text.empty()
-
-    return results, not_found, errors
-
-
-def display_single_result(info: dict):
-    """
-    Display a single species result in a formatted box.
-
-    Parameters
-    ----------
-    info : dict
-        Publication information for a single species.
-    """
-    with st.container():
-        st.markdown('<div class="result-box">', unsafe_allow_html=True)
-
-        # show warning if there's a mismatch
-        if info.get("attribution_mismatch"):
-            st.warning(
-                f"⚠️ **Note:** The taxonomic authority {info['author']} "
-                "does not match "
-                f"the reference below ({info.get('ref_author', 'N/A')}). "
-                f"The original describing paper by {info['author']} may not "
-                "be available in PBDB."
-            )
-
-        col1, col2 = st.columns([1, 3])
-
-        with col1:
-            st.write("**Organism:**")
-            st.write("**Taxonomic Authority:**")
-            if info.get("year"):
-                st.write("**Year:**")
-
-        with col2:
-            st.write(info["organism"])
-            st.write(info["author"])
-            if info.get("year"):
-                st.write(info["year"])
-
-        st.write("**Reference in PBDB:**")
-        st.text(info["full_reference"])
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
-
-def render_header():
-    """Render the application header."""
-    st.title("Species Reference Publication Lookup")
-    st.markdown(
-        "_Query the Paleobiology Database for species publication "
-        "information._"
-    )
-
-
-def render_single_species_tab():
-    """
-    Render the single species lookup interface.
-    """
-    st.markdown("### Enter A Single Species Name")
-
-    # single species input
-    species_input = st.text_input(
-        "Species Name",
+    species_name = st.text_input(
+        "Enter species name:",
         placeholder="e.g., Enchodus petrosus",
-        help="Enter the scientific name of the species.",
+        key="single_search",
     )
 
-    col1, col2 = st.columns([1, 5])
-    with col1:
-        search_button = st.button(
-            "Search", key="single_search", use_container_width=True
-        )
+    if st.button("Search", type="primary", key="search_single"):
+        if species_name:
+            with st.spinner(f"Searching for {species_name}..."):
+                result = search_species(species_name, use_cache=True)
 
-    if search_button and species_input:
-        with st.spinner("Querying PBDB..."):
-            result = query_pbdb(species_input)
-
-        handle_single_species_result(result, species_input)
-
-
-def handle_single_species_result(result: dict | None, species_input: str):
-    """
-    Handle and display the result of a single species query.
-
-    Parameters
-    ----------
-    result : dict | None
-        Query result from PBDB.
-    species_input : str
-        The species name that was searched.
-    """
-    if result is None:
-        st.error(f"No publication information found for '{species_input}'")
-        st.info(
-            "Possible reasons:\n"
-            "- The species name may be spelled differently\n"
-            "- The species may not be in the database\n"
-            "- Try searching without 'cf.' or other qualifiers"
-        )
-    elif "error" in result:
-        st.error(f"Error: {result['error']}")
-    else:
-        st.success("Found publication information:")
-        display_single_result(result)
-
-        # download options
-        col1, col2 = st.columns(2)
-        with col1:
-            st.download_button(
-                label="Download as JSON",
-                data=json.dumps(result, indent=2),
-                file_name=f"{species_input.replace(' ', '_')}.json",
-                mime="application/json",
-            )
-        with col2:
-            # format as text
-            text_content = f"""Organism: {result["organism"]}
-Author: {result["author"]}
-Year: {result.get("year", "Not available")}
-Full Reference: {result["full_reference"]}"""
-            st.download_button(
-                label="Download as Text",
-                data=text_content,
-                file_name=f"{species_input.replace(' ', '_')}.txt",
-                mime="text/plain",
-            )
-
-
-def parse_uploaded_file(uploaded_file) -> list[str]:
-    """
-    Parse species list from uploaded file.
-
-    Parameters
-    ----------
-    uploaded_file : UploadedFile
-        Streamlit uploaded file object.
-
-    Returns
-    -------
-    list[str]
-        List of species names.
-    """
-    stringio = StringIO(uploaded_file.getvalue().decode("utf-8"))
-    content = stringio.read()
-
-    species_list = []
-    for line in content.split("\n"):
-        line = line.strip()
-        if line and not line.startswith("#"):
-            species_list.append(line)
-
-    return species_list
-
-
-def render_file_upload_tab():
-    """Render the file upload interface for batch processing."""
-    st.markdown("### Upload Text File With Species Names")
-    st.info(
-        "File format: One species name per line. Lines starting with # are "
-        "ignored."
-    )
-
-    uploaded_file = st.file_uploader(
-        "Choose Text File",
-        type=["txt"],
-        help="Upload a text file with one species name per line.",
-    )
-
-    # example file content
-    with st.expander("📋 Example File Format"):
-        st.markdown("**Copy this example content to create your own file:**")
-        example_content = """# Example fossil species list
-# Lines starting with # are ignored as comments
-Tyrannosaurus rex
-Triceratops horridus
-Allosaurus fragilis
-Stegosaurus stenops
-Brontosaurus excelsus
-Diplodocus carnegii
-Archaeopteryx lithographica
-Ichthyosaurus communis
-Plesiosaaurus dolichodeirus
-Ammonites bisulcatus"""
-        st.code(example_content, language="text")
-        st.download_button(
-            label="📥 Download Example File",
-            data=example_content,
-            file_name="example_species_list.txt",
-            mime="text/plain",
-            help="Download this example as a text file",
-        )
-
-    if uploaded_file is not None:
-        species_list = parse_uploaded_file(uploaded_file)
-
-        if species_list:
-            handle_uploaded_species_list(species_list)
+            st.divider()
+            display_result(result)
         else:
-            st.warning("No valid species names found in file.")
+            st.warning("Please enter a species name")
 
 
-def handle_uploaded_species_list(species_list: list[str]):
-    """
-    Handle processing of uploaded species list.
+def show_batch_search():
+    """Show batch search interface."""
+    st.subheader("📋 Batch Search")
 
-    Parameters
-    ----------
-    species_list : list[str]
-        List of species names from file.
-    """
-    st.success(f"Found {len(species_list)} species in file.")
+    # create example file for download
+    example_species = (
+        "Stegosaurus stenops\nAmmonites planorbis\nTrilobita paradoxides\n"
+        "Archaeopteryx lithographica\nMegalodon carcharocles\nPterodactylus "
+        "antiquus\nIchthyosaurus communis\nBrontosaurus excelsus\n"
+        "Velociraptor mongoliensis\nMammuthus primigenius"
+    )
 
-    # show species list in expander
-    with st.expander("View species list"):
-        for sp in species_list:
-            st.text(f"- {sp}")
+    # option 1: upload file
+    st.write("**Option 1: Upload a text file**")
+    uploaded_file = st.file_uploader(
+        "Choose a text file with species names (one per line):",
+        type=["txt"],
+        key="species_file",
+    )
 
-    # search button
-    if st.button("Search All Species", key="multi_search"):
-        st.markdown("---")
-        st.markdown("### Results")
+    # option 2: manual entry
+    st.write("**Option 2: Enter species names manually**")
+    species_text = st.text_area(
+        "Enter species names (one per line):",
+        height=150,
+        placeholder="Stegosaurus stenops\nAmmonites planorbis\nTrilobita "
+        "paradoxides\nArchaeopteryx lithographica\nMegalodon "
+        "carcharocles\nPterodactylus antiquus\nIchthyosaurus communis"
+        "\nBrontosaurus excelsus\nVelociraptor mongoliensis\nMammuthus "
+        "primigenius",
+    )
 
-        # query all species
-        results, not_found, errors = query_multiple_species(species_list)
+    # option 3: download example file
+    st.write("**Option 3: Download example file**")
+    st.download_button(
+        label="📥 Download Example File",
+        data=example_species,
+        file_name="example_species_list.txt",
+        mime="text/plain",
+        help="Download an example file with fossil species names",
+        key="download_example_file",
+    )
+
+    # process uploaded file if available
+    if uploaded_file is not None:
+        try:
+            file_content = uploaded_file.read().decode("utf-8")
+            species_text = file_content
+            species_count = len(
+                [line for line in file_content.split("\\n") if line.strip()]
+            )
+            filename = uploaded_file.name
+            st.success(
+                f"✅ Loaded {species_count} species from file: {filename}"
+            )
+        except Exception as e:
+            st.error(f"Error reading file: {e}")
+
+    if st.button("Search All", type="primary") and species_text:
+        species_list = [
+            line.strip() for line in species_text.split("\n") if line.strip()
+        ]
+
+        # progress bar
+        progress = st.progress(0)
+        status = st.empty()
+
+        results = []
+        for i, species in enumerate(species_list):
+            status.text(f"Searching for {species}...")
+            result = search_species(species, use_cache=True)
+            results.append(result)
+            progress.progress((i + 1) / len(species_list))
+
+        progress.empty()
+        status.empty()
 
         # display results
-        display_batch_results(results, not_found, errors, species_list)
+        st.subheader("Results")
+        for result in results:
+            with st.expander(f"{result['search_term']} - {result['source']}"):
+                display_result(result)
 
-
-def display_batch_summary(total: int, found: int, not_found: int):
-    """
-    Display summary metrics for batch processing.
-
-    Parameters
-    ----------
-    total : int
-        Total number of species queried.
-    found : int
-        Number of species found.
-    not_found : int
-        Number of species not found.
-    """
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Total Queried", total)
-    with col2:
-        st.metric("Found", found)
-    with col3:
-        st.metric("Not Found", not_found)
-
-
-def display_batch_results(
-    results: list[dict],
-    not_found: list[str],
-    errors: list[dict],
-    species_list: list[str],
-):
-    """
-    Display results from batch processing.
-
-    Parameters
-    ----------
-    results : list[dict]
-        Successful query results.
-    not_found : list[str]
-        Species not found in PBDB.
-    errors : list[dict]
-        Query errors.
-    species_list : list[str]
-        Original species list.
-    """
-    # display summary
-    display_batch_summary(len(species_list), len(results), len(not_found))
-
-    # display successful results
-    if results:
-        st.markdown("#### Found Publications")
-        for info in results:
-            display_single_result(info)
-
-    # display not found species
-    if not_found:
-        st.markdown("#### Species Not Found in PBDB")
-        not_found_text = "\n".join([f"- {sp}" for sp in not_found])
-        st.text(not_found_text)
-
-    # display errors
-    if errors:
-        st.markdown("#### Query Errors")
-        for error in errors:
-            st.error(f"{error['organism']}: {error['error']}")
-
-    # offer download of all results
-    if results or not_found:
-        offer_batch_download(results, not_found, errors, len(species_list))
-
-
-def offer_batch_download(
-    results: list[dict], not_found: list[str], errors: list[dict], total: int
-):
-    """
-    Provide download button for batch results.
-
-    Parameters
-    ----------
-    results : list[dict]
-        Successful results.
-    not_found : list[str]
-        Not found species.
-    errors : list[dict]
-        Error results.
-    total : int
-        Total species queried.
-    """
-    download_data = {
-        "found": results,
-        "not_found": not_found,
-        "errors": [
-            {"organism": e["organism"], "error": str(e["error"])}
-            for e in errors
-        ],
-        "summary": {
-            "total_queried": total,
-            "found_count": len(results),
-            "not_found_count": len(not_found),
-            "error_count": len(errors),
-        },
-    }
-
-    col1, col2 = st.columns(2)
-    with col1:
-        st.download_button(
-            label="Download All Results as JSON",
-            data=json.dumps(download_data, indent=2),
-            file_name="pbdb_results.json",
-            mime="application/json",
-        )
-    with col2:
-        # format as text
-        text_lines = []
-        text_lines.append("PBDB PUBLICATION LOOKUP RESULTS")
-        text_lines.append("=" * 35)
-        text_lines.append(f"Total Queried: {total}")
-        text_lines.append(f"Found: {len(results)}")
-        text_lines.append(f"Not Found: {len(not_found)}")
-        text_lines.append(f"Errors: {len(errors)}")
-        text_lines.append("")
-
+        # option to download results
         if results:
-            text_lines.append("FOUND PUBLICATIONS:")
-            text_lines.append("-" * 19)
-            for result in results:
-                text_lines.append(f"Organism: {result['organism']}")
-                text_lines.append(f"Author: {result['author']}")
-                text_lines.append(
-                    f"Year: {result.get('year', 'Not available')}"
+            df = pl.DataFrame(results)
+            # remove from_cache column for export
+            if "from_cache" in df.columns:
+                df = df.drop("from_cache")
+            csv = df.write_csv()
+            st.download_button(
+                label="📥 Download Results (CSV)",
+                data=csv,
+                file_name="taxonomy_results.csv",
+                mime="text/csv",
+                key="download_batch_results",
+            )
+
+
+def show_cache_view():
+    """Show cache viewer interface."""
+    st.subheader("📁 Cached Results")
+
+    cache_df = load_cache()
+
+    if cache_df.is_empty():
+        st.info("No cached results yet. Start searching to build the cache!")
+    else:
+        # sorting options
+        col1, col2, col3 = st.columns([2, 1, 1])
+        with col1:
+            sort_by = st.selectbox(
+                "Sort by:",
+                ["timestamp", "search_term", "source", "year"],
+                key="sort_cache",
+            )
+        with col2:
+            sort_order = st.radio(
+                "Order:", ["Descending", "Ascending"], key="sort_order"
+            )
+        with col3:
+            # filter by source
+            sources = cache_df["source"].unique().to_list()
+            sources.insert(0, "All")
+            source_filter = st.selectbox(
+                "Source:", sources, key="source_filter"
+            )
+
+        # apply filters and sorting
+        df = cache_df
+        if source_filter != "All":
+            df = df.filter(pl.col("source") == source_filter)
+
+        df = df.sort(sort_by, descending=(sort_order == "Descending"))
+
+        # limit to 250 rows for display
+        display_df = df.limit(250)
+
+        # convert to markdown table with all fields
+        markdown_rows = []
+        markdown_rows.append(
+            "| Search Term | Authority | Year | Author | Reference | DOI "
+            "| Paper Link | Source | Mismatch | Timestamp |"
+        )
+        markdown_rows.append(
+            "|-------------|-----------|------|--------|-----------|-----|"
+            "------------|--------|----------|-----------|"
+        )
+
+        for row in display_df.to_dicts():
+            # safely handle None values and truncate long fields for display
+            search_term = str(row["search_term"] or "—")
+            search_term = (
+                search_term[:30] + "..."
+                if len(search_term) > 30
+                else search_term
+            )
+
+            authority = str(row["taxonomic_authority"] or "NA")
+            if authority == "Not available":
+                authority = "NA"
+            authority = (
+                authority[:20] + "..." if len(authority) > 20 else authority
+            )
+
+            reference = str(row["reference"] or "NA")
+            if reference == "Not available":
+                reference = "NA"
+            if row.get("year_mismatch", False) and reference != "NA":
+                reference = (
+                    "⚠️ " + reference[:38] + "..."
+                    if len(reference) > 38
+                    else "⚠️ " + reference
                 )
-                text_lines.append(
-                    f"Full Reference: {result['full_reference']}"
+            else:
+                reference = (
+                    reference[:40] + "..."
+                    if len(reference) > 40
+                    else reference
                 )
-                text_lines.append("")
 
-        if not_found:
-            text_lines.append("NOT FOUND SPECIES:")
-            text_lines.append("-" * 18)
-            for species in not_found:
-                text_lines.append(f"- {species}")
-            text_lines.append("")
+            doi = str(row["doi"] or "NA")
+            if doi == "Not available":
+                doi = "NA"
+            elif doi != "NA":
+                # make DOI clickable in markdown
+                doi_url = (
+                    f"https://doi.org/{doi}"
+                    if not doi.startswith("http")
+                    else doi
+                )
+                doi = (
+                    f"[{doi[:15]}...]({doi_url})"
+                    if len(doi) > 15
+                    else f"[{doi}]({doi_url})"
+                )
+            else:
+                doi = doi[:20] + "..." if len(doi) > 20 else doi
 
-        if errors:
-            text_lines.append("QUERY ERRORS:")
-            text_lines.append("-" * 13)
-            for error in errors:
-                text_lines.append(f"{error['organism']}: {error['error']}")
-            text_lines.append("")
+            paper_link = str(row["paper_link"] or "NA")
+            if paper_link == "Not available":
+                paper_link = "NA"
+            elif paper_link != "NA":
+                # make paper link clickable in markdown
+                paper_link = f"[🔗 Link]({paper_link})"
+            else:
+                paper_link = (
+                    paper_link[:30] + "..."
+                    if len(paper_link) > 30
+                    else paper_link
+                )
 
-        text_content = "\n".join(text_lines)
+            source = str(row["source"] or "NA")
+            if source == "Not available":
+                source = "NA"
+            source = source[:15] + "..." if len(source) > 15 else source
 
+            timestamp = (
+                str(row["timestamp"])[:16] if row["timestamp"] else "NA"
+            )
+
+            author = str(row["author"] or "NA")
+            if author == "Not available":
+                author = "NA"
+
+            year_mismatch = "⚠️" if row.get("year_mismatch", False) else "✅"
+            year_display = row["year"] or "—"
+
+            table_row = (
+                f"| {search_term} | {authority} | {year_display} | {author} | "
+                f"{reference} | {doi} | {paper_link} | {source} | "
+                f"{year_mismatch} | {timestamp} |"
+            )
+            markdown_rows.append(table_row)
+
+        st.markdown("\n".join(markdown_rows))
+
+        if len(df) > 250:
+            st.info(f"Showing first 250 of {len(df)} total entries.")
+
+        # stats
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total entries", len(df))
+        with col2:
+            st.metric("Unique species", df["search_term"].n_unique())
+        with col3:
+            st.metric("Sources used", df["source"].n_unique())
+
+        # download option only
+        csv = df.write_csv()
         st.download_button(
-            label="Download All Results as Text",
-            data=text_content,
-            file_name="pbdb_results.txt",
-            mime="text/plain",
+            label="📥 Download Cache (CSV)",
+            data=csv,
+            file_name="taxonomy_cache.csv",
+            mime="text/csv",
+            key="download_cache_csv",
         )
 
 
-def render_footer():
-    """Render the application footer with information."""
+def main():
+    """Main application function."""
+    configure_page()
+
+    st.title("Taxonomic Reference Finder")
+    st.markdown("""
+    Find original taxonomic descriptions and publications for species names.
+    Results are cached in `data/results.parquet` for faster subsequent
+    searches.
+    """)
+
+    # main tabs
+    tab1, tab2, tab3 = st.tabs(["Single Search", "Batch Search", "View Cache"])
+
+    with tab1:
+        show_single_search()
+
+    with tab2:
+        show_batch_search()
+
+    with tab3:
+        show_cache_view()
+
+    # footer notes on all pages
     st.markdown("---")
+    st.markdown("### How This Works")
+    st.markdown("""
+    This application searches multiple taxonomic databases including the
+    Paleobiology Database (PBDB), GBIF, ZooBank, and WoRMS to find original
+    taxonomic authorities and publication references for fossil and modern
+    species. When you search for a species, the system first checks the
+    local cache for previously retrieved results, then queries each database
+    sequentially if no cached data exists. The application uses reference
+    validation to ensure that publication years match the taxonomic authority
+    years, providing warnings when mismatches occur that might indicate the
+    reference is not the original taxonomic description. All successful
+    searches are automatically cached to minimize future API calls and provide
+    faster responses for repeated queries.
+    """)
+
     st.markdown("### Notes")
     st.markdown(
         "This tool queries the "
@@ -622,29 +480,16 @@ def render_footer():
         "repository.\n"
         "* Engaging in a [discussion thread]("
         "https://github.com/O957/fossil-species-references/discussions) in "
-        "this repository.\n"
+        "this repository:\n"
+        "  * e.g. indicating fauna for which no results are return "
+        "(see [here]("
+        "https://github.com/O957/fossil-species-references/discussions/8)).\n"
+        "  * e.g. identifying papers, DOIs, or references for fauna (see "
+        "[here]("
+        "https://github.com/O957/fossil-species-references/discussions/12)).\n"
         "* Contacting me via email: [my github username]+[@]+[pro]+[ton]+[.]+"
         "[me]"
     )
-
-
-def render_main_tabs():
-    """Render the main tabbed interface."""
-    tab1, tab2 = st.tabs(["Single Species", "Multiple Species (File Upload)"])
-
-    with tab1:
-        render_single_species_tab()
-
-    with tab2:
-        render_file_upload_tab()
-
-
-def main():
-    """Main application entry point."""
-    configure_page()
-    render_header()
-    render_main_tabs()
-    render_footer()
 
 
 if __name__ == "__main__":
