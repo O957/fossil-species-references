@@ -354,7 +354,7 @@ def query_worms(species_name: str) -> dict[str, Any] | None:
 
 
 def query_crossref(
-    reference: str, author: str = None, year: int = None
+    reference: str, author: str | None = None, year: int | None = None
 ) -> dict[str, str] | None:
     """
     Query CrossRef for publication DOI and link.
