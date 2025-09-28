@@ -5,15 +5,15 @@ Simplified database query functions for taxonomic information.
 import re
 import time
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any
 
 import polars as pl
 import requests
 
-from config_loader import NOT_AVAILABLE, API_DELAY, CROSSREF_BASE_URL
+from config_loader import API_DELAY, CROSSREF_BASE_URL, NOT_AVAILABLE
 
 
-def extract_year(text: str) -> Optional[int]:
+def extract_year(text: str) -> int | None:
     """
     Extract a 4-digit year from text.
 
@@ -31,7 +31,7 @@ def extract_year(text: str) -> Optional[int]:
         return None
 
     # look for 4-digit years
-    years = re.findall(r'\b(1[7-9]\d{2}|20[0-2]\d)\b', text)
+    years = re.findall(r"\b(1[7-9]\d{2}|20[0-2]\d)\b", text)
     if years:
         return int(years[0])
     return None
@@ -97,7 +97,9 @@ def extract_paper_title(citation: str) -> str:
         # check each part for a year pattern
         for i, part in enumerate(parts):
             # if this part contains a 4-digit year, next part might be title
-            if re.search(r'\b(1[7-9]\d{2}|20[0-2]\d)\b', part) and i + 1 < len(parts):
+            if re.search(r"\b(1[7-9]\d{2}|20[0-2]\d)\b", part) and i + 1 < len(
+                parts
+            ):
                 title_candidate = parts[i + 1].strip()
 
                 # clean up title - remove trailing punctuation and journal info
@@ -105,13 +107,21 @@ def extract_paper_title(citation: str) -> str:
 
                 # stop at common journal indicators
                 journal_indicators = [
-                    "in ", "journal", "bulletin", "proceedings", "annals",
-                    "transactions", "memoirs", "reports", "vol.", "volume"
+                    "in ",
+                    "journal",
+                    "bulletin",
+                    "proceedings",
+                    "annals",
+                    "transactions",
+                    "memoirs",
+                    "reports",
+                    "vol.",
+                    "volume",
                 ]
 
                 for indicator in journal_indicators:
                     if indicator in title.lower():
-                        title = title[:title.lower().find(indicator)].strip()
+                        title = title[: title.lower().find(indicator)].strip()
                         break
 
                 # clean trailing punctuation
@@ -127,7 +137,7 @@ def extract_paper_title(citation: str) -> str:
     return citation
 
 
-def query_gbif(species_name: str) -> Optional[Dict[str, Any]]:
+def query_gbif(species_name: str) -> dict[str, Any] | None:
     """
     Query GBIF for taxonomic information.
 
@@ -163,7 +173,11 @@ def query_gbif(species_name: str) -> Optional[Dict[str, Any]]:
                 published_in = detail_data.get("publishedIn", NOT_AVAILABLE)
 
                 # GBIF often has the reference in publishedIn field
-                reference = published_in if published_in != NOT_AVAILABLE else NOT_AVAILABLE
+                reference = (
+                    published_in
+                    if published_in != NOT_AVAILABLE
+                    else NOT_AVAILABLE
+                )
 
                 return {
                     "taxonomic_authority": authorship,
@@ -171,7 +185,7 @@ def query_gbif(species_name: str) -> Optional[Dict[str, Any]]:
                     "year": extract_year(authorship),
                     "author": extract_author(authorship),
                     "doi": NOT_AVAILABLE,
-                    "source": "GBIF"
+                    "source": "GBIF",
                 }
     except Exception as e:
         print(f"GBIF error: {e}")
@@ -179,7 +193,7 @@ def query_gbif(species_name: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def query_zoobank(species_name: str) -> Optional[Dict[str, Any]]:
+def query_zoobank(species_name: str) -> dict[str, Any] | None:
     """
     Query ZooBank for taxonomic information.
 
@@ -194,12 +208,10 @@ def query_zoobank(species_name: str) -> Optional[Dict[str, Any]]:
         Taxonomic information or None.
     """
     try:
-        search_url = "https://zoobank.org/NomenclatorZoologicus/api/name/search"
-        params = {
-            "name": species_name,
-            "exact": "true",
-            "format": "json"
-        }
+        search_url = (
+            "https://zoobank.org/NomenclatorZoologicus/api/name/search"
+        )
+        params = {"name": species_name, "exact": "true", "format": "json"}
 
         response = requests.get(search_url, params=params, timeout=5)
         response.raise_for_status()
@@ -214,7 +226,7 @@ def query_zoobank(species_name: str) -> Optional[Dict[str, Any]]:
                 "year": extract_year(record.get("authorship_year", "")),
                 "author": extract_author(authorship),
                 "doi": record.get("doi", NOT_AVAILABLE),
-                "source": "ZooBank"
+                "source": "ZooBank",
             }
     except:
         pass
@@ -222,7 +234,7 @@ def query_zoobank(species_name: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def query_pbdb_local(species_name: str) -> Optional[Dict[str, Any]]:
+def query_pbdb_local(species_name: str) -> dict[str, Any] | None:
     """
     Query local PBDB parquet file.
 
@@ -237,7 +249,11 @@ def query_pbdb_local(species_name: str) -> Optional[Dict[str, Any]]:
         Taxonomic information or None.
     """
     try:
-        pbdb_file = Path(__file__).parent.parent / "data" / "pbdb_essential_taxonomy_with_refs.parquet"
+        pbdb_file = (
+            Path(__file__).parent.parent
+            / "data"
+            / "pbdb_essential_taxonomy_with_refs.parquet"
+        )
         if not pbdb_file.exists():
             return None
 
@@ -269,8 +285,10 @@ def query_pbdb_local(species_name: str) -> Optional[Dict[str, Any]]:
                 "reference": full_reference,  # complete citation as it appears
                 "year": year,
                 "author": author,
-                "doi": row.get("doi", NOT_AVAILABLE) if row.get("doi") not in ["null", None] else NOT_AVAILABLE,
-                "source": "PBDB"
+                "doi": row.get("doi", NOT_AVAILABLE)
+                if row.get("doi") not in ["null", None]
+                else NOT_AVAILABLE,
+                "source": "PBDB",
             }
     except Exception as e:
         print(f"Error querying PBDB: {e}")
@@ -278,7 +296,7 @@ def query_pbdb_local(species_name: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def query_worms(species_name: str) -> Optional[Dict[str, Any]]:
+def query_worms(species_name: str) -> dict[str, Any] | None:
     """
     Query WoRMS for marine species information.
 
@@ -310,7 +328,9 @@ def query_worms(species_name: str) -> Optional[Dict[str, Any]]:
                 # get citation
                 aphia_id = record.get("AphiaID")
                 if aphia_id:
-                    citation_url = f"{WORMS_BASE_URL}/AphiaRecordByAphiaID/{aphia_id}"
+                    citation_url = (
+                        f"{WORMS_BASE_URL}/AphiaRecordByAphiaID/{aphia_id}"
+                    )
                     citation_response = requests.get(citation_url, timeout=5)
                     citation_response.raise_for_status()
                     full_record = citation_response.json()
@@ -318,11 +338,13 @@ def query_worms(species_name: str) -> Optional[Dict[str, Any]]:
                     authority = full_record.get("authority", NOT_AVAILABLE)
                     return {
                         "taxonomic_authority": authority,
-                        "reference": full_record.get("citation", NOT_AVAILABLE),
+                        "reference": full_record.get(
+                            "citation", NOT_AVAILABLE
+                        ),
                         "year": extract_year(authority),
                         "author": extract_author(authority),
                         "doi": NOT_AVAILABLE,
-                        "source": "WoRMS"
+                        "source": "WoRMS",
                     }
     except:
         pass
@@ -330,7 +352,9 @@ def query_worms(species_name: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def query_crossref(reference: str, author: str = None, year: int = None) -> Optional[Dict[str, str]]:
+def query_crossref(
+    reference: str, author: str = None, year: int = None
+) -> dict[str, str] | None:
     """
     Query CrossRef for publication DOI and link.
 
@@ -360,7 +384,7 @@ def query_crossref(reference: str, author: str = None, year: int = None) -> Opti
             parts = reference.split(". ")
             for i, part in enumerate(parts):
                 # title usually comes after year
-                if i > 0 and any(char.isdigit() for char in parts[i-1]):
+                if i > 0 and any(char.isdigit() for char in parts[i - 1]):
                     # found likely title
                     title = part
                     # remove journal info if present
@@ -390,13 +414,13 @@ def query_crossref(reference: str, author: str = None, year: int = None) -> Opti
         params = {
             "query": query,
             "rows": 10,  # increased for better chance of finding old papers
-            "select": "DOI,URL,title,author,published-print,published-online"
+            "select": "DOI,URL,title,author,published-print,published-online",
         }
 
         response = requests.get(
             CROSSREF_BASE_URL,
             params=params,
-            timeout=10  # increased timeout
+            timeout=10,  # increased timeout
         )
         response.raise_for_status()
         data = response.json()
@@ -411,7 +435,9 @@ def query_crossref(reference: str, author: str = None, year: int = None) -> Opti
                 item_title_lower = item_title.lower()
 
                 # check various matching strategies
-                title_words = set(title_lower.split()[:5])  # first 5 words of title
+                title_words = set(
+                    title_lower.split()[:5]
+                )  # first 5 words of title
                 item_words = set(item_title_lower.split())
 
                 # if significant overlap in words, consider it a match
@@ -422,17 +448,14 @@ def query_crossref(reference: str, author: str = None, year: int = None) -> Opti
                     if not url and doi != NOT_AVAILABLE:
                         url = f"https://doi.org/{doi}"
 
-                    return {
-                        "doi": doi,
-                        "paper_link": url or NOT_AVAILABLE
-                    }
+                    return {"doi": doi, "paper_link": url or NOT_AVAILABLE}
     except Exception as e:
         print(f"CrossRef error: {e}")
 
     return None
 
 
-def search_taxonomy(species_name: str) -> Dict[str, Any]:
+def search_taxonomy(species_name: str) -> dict[str, Any]:
     """
     Search for taxonomic information across databases.
     Searches all databases to find the most complete information,
@@ -458,7 +481,7 @@ def search_taxonomy(species_name: str) -> Dict[str, Any]:
         "doi": NOT_AVAILABLE,
         "paper_link": NOT_AVAILABLE,
         "source": NOT_AVAILABLE,
-        "year_mismatch": False  # flag for reference year not matching authority year
+        "year_mismatch": False,  # flag for reference year not matching authority year
     }
 
     # sequential database search (GBIF first)
@@ -486,7 +509,10 @@ def search_taxonomy(species_name: str) -> Dict[str, Any]:
 
     # find best authority (prefer first non-empty one)
     for db_result in all_results:
-        if result["taxonomic_authority"] == NOT_AVAILABLE and db_result.get("taxonomic_authority") != NOT_AVAILABLE:
+        if (
+            result["taxonomic_authority"] == NOT_AVAILABLE
+            and db_result.get("taxonomic_authority") != NOT_AVAILABLE
+        ):
             result["taxonomic_authority"] = db_result["taxonomic_authority"]
             result["year"] = db_result.get("year")
             result["author"] = db_result.get("author", NOT_AVAILABLE)
@@ -518,26 +544,41 @@ def search_taxonomy(species_name: str) -> Dict[str, Any]:
 
                 # prioritize sources that aren't modern database citations
                 ref_lower = ref.lower()
-                if any(indicator in ref_lower for indicator in ["accessed through", "fishbase", "world register", "editors", "database"]):
+                if any(
+                    indicator in ref_lower
+                    for indicator in [
+                        "accessed through",
+                        "fishbase",
+                        "world register",
+                        "editors",
+                        "database",
+                    ]
+                ):
                     score -= 500  # penalize modern database citations
 
                 # prefer longer references (more complete bibliographic info)
                 score += len(ref)
 
-                valid_references.append({
-                    "reference": ref,
-                    "source": source,
-                    "score": score,
-                    "doi": db_result.get("doi", NOT_AVAILABLE) if db_result.get("doi") not in [None, "null"] else NOT_AVAILABLE
-                })
+                valid_references.append(
+                    {
+                        "reference": ref,
+                        "source": source,
+                        "score": score,
+                        "doi": db_result.get("doi", NOT_AVAILABLE)
+                        if db_result.get("doi") not in [None, "null"]
+                        else NOT_AVAILABLE,
+                    }
+                )
             else:
                 # reference year doesn't match - this is NOT the original description
-                mismatched_references.append({
-                    "reference": ref,
-                    "source": source,
-                    "ref_year": ref_year,
-                    "authority_year": result["year"]
-                })
+                mismatched_references.append(
+                    {
+                        "reference": ref,
+                        "source": source,
+                        "ref_year": ref_year,
+                        "authority_year": result["year"],
+                    }
+                )
 
     # if we have valid (year-matched) references, use the best one
     if valid_references:
@@ -551,8 +592,13 @@ def search_taxonomy(species_name: str) -> Dict[str, Any]:
 
         # update source to show where reference came from
         best_reference_source = best_ref_data["source"]
-        if result["source"] != best_reference_source and best_reference_source not in result["source"]:
-            result["source"] = f"{result['source']} (ref: {best_reference_source})"
+        if (
+            result["source"] != best_reference_source
+            and best_reference_source not in result["source"]
+        ):
+            result["source"] = (
+                f"{result['source']} (ref: {best_reference_source})"
+            )
 
     else:
         # no valid references found - all have year mismatches
@@ -561,11 +607,11 @@ def search_taxonomy(species_name: str) -> Dict[str, Any]:
         result["reference"] = NOT_AVAILABLE
 
     # if we have authority and reference, try to get DOI via CrossRef
-    if result["reference"] != NOT_AVAILABLE and (result["doi"] == NOT_AVAILABLE or result["doi"] is None):
+    if result["reference"] != NOT_AVAILABLE and (
+        result["doi"] == NOT_AVAILABLE or result["doi"] is None
+    ):
         crossref_result = query_crossref(
-            result["reference"],
-            result["author"],
-            result["year"]
+            result["reference"], result["author"], result["year"]
         )
 
         if crossref_result:

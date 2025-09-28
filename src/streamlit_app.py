@@ -3,18 +3,14 @@ Streamlit app for finding original taxonomic descriptions.
 Uses simplified cache-first approach with persistent parquet storage.
 """
 
-import time
-
 import polars as pl
 import streamlit as st
 
 from database_queries import search_taxonomy
 from taxonomy_cache import (
+    load_cache,
     lookup_in_cache,
     save_to_cache,
-    load_cache,
-    clear_cache,
-    get_cache_stats,
 )
 
 
@@ -22,7 +18,6 @@ def configure_page():
     """Configure the Streamlit page settings."""
     st.set_page_config(
         page_title="Taxonomic Reference Finder",
-        page_icon="🦴",
         layout="wide",
         initial_sidebar_state="expanded",
     )
@@ -37,20 +32,30 @@ def display_result(result: dict):
     result : dict
         Result dictionary from search.
     """
-    st.subheader(f"🔬 {result['search_term']}")
+    st.subheader(f"{result['search_term']}")
 
     # check for year mismatch warning
     if result.get("year_mismatch", False):
-        st.warning("⚠️ **Year Mismatch Warning**: No reference found with matching publication year. The reference may not be the original taxonomic description.")
+        st.warning(
+            "⚠️ **Year Mismatch Warning**: No reference found with matching publication year. The reference may not be the original taxonomic description."
+        )
 
     # create two columns
     col1, col2 = st.columns([2, 1])
 
     with col1:
         # main information
-        st.write("**Taxonomic Authority:**", result["taxonomic_authority"] if result["taxonomic_authority"] != "Not available" else "NA")
+        st.write(
+            "**Taxonomic Authority:**",
+            result["taxonomic_authority"]
+            if result["taxonomic_authority"] != "Not available"
+            else "NA",
+        )
         st.write("**Year:**", result["year"] or "NA")
-        st.write("**Author:**", result["author"] if result["author"] != "Not available" else "NA")
+        st.write(
+            "**Author:**",
+            result["author"] if result["author"] != "Not available" else "NA",
+        )
 
         # reference with mismatch indicator
         if result["reference"] != "Not available":
@@ -76,30 +81,13 @@ def display_result(result: dict):
         # links
         if result["doi"] != "Not available":
             st.write("**DOI:**", result["doi"])
+        else:
+            st.write("**DOI:** NA")
 
         if result["paper_link"] != "Not available":
             st.markdown(f"[📄 View Paper]({result['paper_link']})")
-
-
-def show_sidebar_stats():
-    """Display cache statistics in sidebar."""
-    stats = get_cache_stats()
-
-    if stats["count"] > 0:
-        st.sidebar.subheader("📊 Cache Statistics")
-        st.sidebar.metric("Cached species", stats["count"])
-
-        # source breakdown
-        if stats["sources"]:
-            st.sidebar.write("**By source:**")
-            for source, count in stats["sources"].items():
-                st.sidebar.text(f"• {source}: {count}")
-
-        # recent searches
-        if stats["recent"]:
-            st.sidebar.write("**Recent searches:**")
-            for item in stats["recent"][:5]:
-                st.sidebar.text(f"• {item['search_term']}")
+        else:
+            st.write("**Paper Link:** NA")
 
 
 def search_species(species_name: str, use_cache: bool = True) -> dict:
@@ -134,9 +122,9 @@ def search_species(species_name: str, use_cache: bool = True) -> dict:
 
     # only save to cache if we found some useful information
     has_useful_info = (
-        result["taxonomic_authority"] != "Not available" or
-        result["reference"] != "Not available" or
-        (result["doi"] != "Not available" and result["doi"] is not None)
+        result["taxonomic_authority"] != "Not available"
+        or result["reference"] != "Not available"
+        or (result["doi"] != "Not available" and result["doi"] is not None)
     )
 
     if has_useful_info:
@@ -149,20 +137,16 @@ def show_single_search():
     """Show single species search interface."""
     st.subheader("🔍 Single Species Search")
 
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        species_name = st.text_input(
-            "Enter species name:",
-            placeholder="e.g., Tyrannosaurus rex",
-            key="single_search"
-        )
-    with col2:
-        use_cache = st.checkbox("Use cache", value=True, key="use_cache_single")
+    species_name = st.text_input(
+        "Enter species name:",
+        placeholder="e.g., Tyrannosaurus rex",
+        key="single_search",
+    )
 
     if st.button("Search", type="primary", key="search_single"):
         if species_name:
             with st.spinner(f"Searching for {species_name}..."):
-                result = search_species(species_name, use_cache=use_cache)
+                result = search_species(species_name, use_cache=True)
 
             st.divider()
             display_result(result)
@@ -174,54 +158,91 @@ def show_batch_search():
     """Show batch search interface."""
     st.subheader("📋 Batch Search")
 
-    # text area for multiple species
+    # create example file for download
+    example_species = "Stegosaurus stenops\nAmmonites planorbis\nTrilobita paradoxides\nArchaeopteryx lithographica\nMegalodon carcharocles\nPterodactylus antiquus\nIchthyosaurus communis\nBrontosaurus excelsus\nVelociraptor mongoliensis\nMammuthus primigenius"
+
+    # option 1: upload file
+    st.write("**Option 1: Upload a text file**")
+    uploaded_file = st.file_uploader(
+        "Choose a text file with species names (one per line):",
+        type=["txt"],
+        key="species_file",
+    )
+
+    # option 2: manual entry
+    st.write("**Option 2: Enter species names manually**")
     species_text = st.text_area(
         "Enter species names (one per line):",
         height=150,
-        placeholder="Tyrannosaurus rex\nEnchodus petrosus\nDiplodocus carnegii"
+        placeholder="Stegosaurus stenops\nAmmonites planorbis\nTrilobita paradoxides\nArchaeopteryx lithographica\nMegalodon carcharocles\nPterodactylus antiquus\nIchthyosaurus communis\nBrontosaurus excelsus\nVelociraptor mongoliensis\nMammuthus primigenius",
     )
 
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        use_cache = st.checkbox("Use cache", value=True, key="use_cache_batch")
-    with col2:
-        if st.button("Search All", type="primary"):
-            if species_text:
-                species_list = [line.strip() for line in species_text.split("\n") if line.strip()]
+    # option 3: download example file
+    st.write("**Option 3: Download example file**")
+    st.download_button(
+        label="📥 Download Example File",
+        data=example_species,
+        file_name="example_species_list.txt",
+        mime="text/plain",
+        help="Download an example file with fossil species names",
+        key="download_example_file",
+    )
 
-                # progress bar
-                progress = st.progress(0)
-                status = st.empty()
+    # process uploaded file if available
+    if uploaded_file is not None:
+        try:
+            file_content = uploaded_file.read().decode("utf-8")
+            species_text = file_content
+            st.success(
+                f"✅ Loaded {len([line for line in file_content.split('\\n') if line.strip()])} species from file: {uploaded_file.name}"
+            )
+        except Exception as e:
+            st.error(f"Error reading file: {e}")
 
-                results = []
-                for i, species in enumerate(species_list):
-                    status.text(f"Searching for {species}...")
-                    result = search_species(species, use_cache=use_cache)
-                    results.append(result)
-                    progress.progress((i + 1) / len(species_list))
+    if st.button("Search All", type="primary"):
+        if species_text:
+            species_list = [
+                line.strip()
+                for line in species_text.split("\n")
+                if line.strip()
+            ]
 
-                progress.empty()
-                status.empty()
+            # progress bar
+            progress = st.progress(0)
+            status = st.empty()
 
-                # display results
-                st.subheader("Results")
-                for result in results:
-                    with st.expander(f"{result['search_term']} - {result['source']}"):
-                        display_result(result)
+            results = []
+            for i, species in enumerate(species_list):
+                status.text(f"Searching for {species}...")
+                result = search_species(species, use_cache=True)
+                results.append(result)
+                progress.progress((i + 1) / len(species_list))
 
-                # option to download results
-                if results:
-                    df = pl.DataFrame(results)
-                    # remove from_cache column for export
-                    if "from_cache" in df.columns:
-                        df = df.drop("from_cache")
-                    csv = df.write_csv()
-                    st.download_button(
-                        label="📥 Download Results (CSV)",
-                        data=csv,
-                        file_name="taxonomy_results.csv",
-                        mime="text/csv"
-                    )
+            progress.empty()
+            status.empty()
+
+            # display results
+            st.subheader("Results")
+            for result in results:
+                with st.expander(
+                    f"{result['search_term']} - {result['source']}"
+                ):
+                    display_result(result)
+
+            # option to download results
+            if results:
+                df = pl.DataFrame(results)
+                # remove from_cache column for export
+                if "from_cache" in df.columns:
+                    df = df.drop("from_cache")
+                csv = df.write_csv()
+                st.download_button(
+                    label="📥 Download Results (CSV)",
+                    data=csv,
+                    file_name="taxonomy_results.csv",
+                    mime="text/csv",
+                    key="download_batch_results",
+                )
 
 
 def show_cache_view():
@@ -239,22 +260,18 @@ def show_cache_view():
             sort_by = st.selectbox(
                 "Sort by:",
                 ["timestamp", "search_term", "source", "year"],
-                key="sort_cache"
+                key="sort_cache",
             )
         with col2:
             sort_order = st.radio(
-                "Order:",
-                ["Descending", "Ascending"],
-                key="sort_order"
+                "Order:", ["Descending", "Ascending"], key="sort_order"
             )
         with col3:
             # filter by source
             sources = cache_df["source"].unique().to_list()
             sources.insert(0, "All")
             source_filter = st.selectbox(
-                "Source:",
-                sources,
-                key="source_filter"
+                "Source:", sources, key="source_filter"
             )
 
         # apply filters and sorting
@@ -262,48 +279,82 @@ def show_cache_view():
         if source_filter != "All":
             df = df.filter(pl.col("source") == source_filter)
 
-        df = df.sort(
-            sort_by,
-            descending=(sort_order == "Descending")
-        )
+        df = df.sort(sort_by, descending=(sort_order == "Descending"))
 
         # limit to 250 rows for display
         display_df = df.limit(250)
 
         # convert to markdown table with all fields
         markdown_rows = []
-        markdown_rows.append("| Search Term | Authority | Year | Author | Reference | DOI | Paper Link | Source | Mismatch | Timestamp |")
-        markdown_rows.append("|-------------|-----------|------|--------|-----------|-----|------------|--------|----------|-----------|")
+        markdown_rows.append(
+            "| Search Term | Authority | Year | Author | Reference | DOI | Paper Link | Source | Mismatch | Timestamp |"
+        )
+        markdown_rows.append(
+            "|-------------|-----------|------|--------|-----------|-----|------------|--------|----------|-----------|"
+        )
 
         for row in display_df.to_dicts():
             # safely handle None values and truncate long fields for display
             search_term = str(row["search_term"] or "—")
-            search_term = search_term[:30] + "..." if len(search_term) > 30 else search_term
+            search_term = (
+                search_term[:30] + "..."
+                if len(search_term) > 30
+                else search_term
+            )
 
-            authority = str(row["taxonomic_authority"] or "—")
-            authority = authority[:20] + "..." if len(authority) > 20 else authority
+            authority = str(row["taxonomic_authority"] or "NA")
+            if authority == "Not available":
+                authority = "NA"
+            authority = (
+                authority[:20] + "..." if len(authority) > 20 else authority
+            )
 
-            reference = str(row["reference"] or "—")
-            if row.get("year_mismatch", False):
-                reference = "⚠️ " + reference[:38] + "..." if len(reference) > 38 else "⚠️ " + reference
+            reference = str(row["reference"] or "NA")
+            if reference == "Not available":
+                reference = "NA"
+            if row.get("year_mismatch", False) and reference != "NA":
+                reference = (
+                    "⚠️ " + reference[:38] + "..."
+                    if len(reference) > 38
+                    else "⚠️ " + reference
+                )
             else:
-                reference = reference[:40] + "..." if len(reference) > 40 else reference
+                reference = (
+                    reference[:40] + "..."
+                    if len(reference) > 40
+                    else reference
+                )
 
-            doi = str(row["doi"] or "—")
+            doi = str(row["doi"] or "NA")
+            if doi == "Not available":
+                doi = "NA"
             doi = doi[:20] + "..." if len(doi) > 20 else doi
 
-            paper_link = "🔗" if row["paper_link"] and row["paper_link"] != "Not available" else "—"
+            paper_link = str(row["paper_link"] or "NA")
+            if paper_link == "Not available":
+                paper_link = "NA"
+            paper_link = (
+                paper_link[:30] + "..." if len(paper_link) > 30 else paper_link
+            )
 
-            source = str(row["source"] or "—")
+            source = str(row["source"] or "NA")
+            if source == "Not available":
+                source = "NA"
             source = source[:15] + "..." if len(source) > 15 else source
 
-            timestamp = str(row["timestamp"])[:16] if row["timestamp"] else "—"
+            timestamp = (
+                str(row["timestamp"])[:16] if row["timestamp"] else "NA"
+            )
 
-            author = str(row["author"] or "—")
+            author = str(row["author"] or "NA")
+            if author == "Not available":
+                author = "NA"
 
             year_mismatch = "⚠️" if row.get("year_mismatch", False) else "✅"
 
-            markdown_rows.append(f"| {search_term} | {authority} | {row['year'] or '—'} | {author} | {reference} | {doi} | {paper_link} | {source} | {year_mismatch} | {timestamp} |")
+            markdown_rows.append(
+                f"| {search_term} | {authority} | {row['year'] or '—'} | {author} | {reference} | {doi} | {paper_link} | {source} | {year_mismatch} | {timestamp} |"
+            )
 
         st.markdown("\n".join(markdown_rows))
 
@@ -325,7 +376,8 @@ def show_cache_view():
             label="📥 Download Cache (CSV)",
             data=csv,
             file_name="taxonomy_cache.csv",
-            mime="text/csv"
+            mime="text/csv",
+            key="download_cache_csv",
         )
 
 
@@ -333,14 +385,11 @@ def main():
     """Main application function."""
     configure_page()
 
-    st.title("🦴 Taxonomic Reference Finder")
+    st.title("Taxonomic Reference Finder")
     st.markdown("""
     Find original taxonomic descriptions and publications for species names.
     Results are cached locally in `data/results.parquet` for faster subsequent searches.
     """)
-
-    # sidebar stats
-    show_sidebar_stats()
 
     # main tabs
     tab1, tab2, tab3 = st.tabs(["Single Search", "Batch Search", "View Cache"])
@@ -353,6 +402,48 @@ def main():
 
     with tab3:
         show_cache_view()
+
+    # footer notes on all pages
+    st.markdown("---")
+    st.markdown("### How This Works")
+    st.markdown("""
+    This application searches multiple taxonomic databases including the Paleobiology Database (PBDB), GBIF, ZooBank, and WoRMS to find original taxonomic authorities and publication references for fossil and modern species. When you search for a species, the system first checks the local cache for previously retrieved results, then queries each database sequentially if no cached data exists. The application uses reference validation to ensure that publication years match the taxonomic authority years, providing warnings when mismatches occur that might indicate the reference is not the original taxonomic description. All successful searches are automatically cached to minimize future API calls and provide faster responses for repeated queries.
+    """)
+
+    st.markdown("### Notes")
+    st.markdown(
+        "This tool queries the "
+        "[Paleobiology Database](https://paleobiodb.org) "
+        "to retrieve original publication information for species.\n\n"
+        "The repository for this application can be found here: "
+        "<https://github.com/O957/fossil-species-references>.\n\n"
+        "The license for this application: "
+        "<https://github.com/O957/fossil-species-references/blob/main/LICENSE>"
+    )
+    st.markdown(
+        "**NOTE** A small delay is added between queries to be respectful "
+        "to the PBDB API."
+    )
+    st.markdown(
+        "__How may I contribute to this project?__\n"
+        "* Making an [issue]("
+        "https://github.com/O957/fossil-species-references/issues) (comment, "
+        "feature, bug) in this repository.\n"
+        "* Making a [pull request]("
+        "https://github.com/O957/fossil-species-references/pulls) to this "
+        "repository.\n"
+        "* Engaging in a [discussion thread]("
+        "https://github.com/O957/fossil-species-references/discussions) in "
+        "this repository:\n"
+        "  * e.g. indicating fauna for which no results are return "
+        "(see [here]("
+        "https://github.com/O957/fossil-species-references/discussions/8)).\n"
+        "  * e.g. identifying papers, DOIs, or references for fauna (see "
+        "[here]("
+        "https://github.com/O957/fossil-species-references/discussions/12)).\n"
+        "* Contacting me via email: [my github username]+[@]+[pro]+[ton]+[.]+"
+        "[me]"
+    )
 
 
 if __name__ == "__main__":

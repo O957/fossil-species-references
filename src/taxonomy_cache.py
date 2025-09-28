@@ -4,12 +4,11 @@ Persistent cache functions for taxonomy search results using parquet format.
 
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any
 
 import polars as pl
 
 from config_loader import NOT_AVAILABLE
-
 
 # cache file location
 CACHE_FILE = Path(__file__).parent.parent / "data" / "results.parquet"
@@ -31,21 +30,23 @@ def load_cache() -> pl.DataFrame:
             pass
 
     # create empty dataframe with schema
-    return pl.DataFrame(schema={
-        "search_term": pl.Utf8,
-        "taxonomic_authority": pl.Utf8,
-        "year": pl.Int64,
-        "author": pl.Utf8,
-        "reference": pl.Utf8,
-        "doi": pl.Utf8,
-        "paper_link": pl.Utf8,
-        "source": pl.Utf8,
-        "year_mismatch": pl.Boolean,
-        "timestamp": pl.Datetime,
-    })
+    return pl.DataFrame(
+        schema={
+            "search_term": pl.Utf8,
+            "taxonomic_authority": pl.Utf8,
+            "year": pl.Int64,
+            "author": pl.Utf8,
+            "reference": pl.Utf8,
+            "doi": pl.Utf8,
+            "paper_link": pl.Utf8,
+            "source": pl.Utf8,
+            "year_mismatch": pl.Boolean,
+            "timestamp": pl.Datetime,
+        }
+    )
 
 
-def lookup_in_cache(search_term: str) -> Optional[Dict[str, Any]]:
+def lookup_in_cache(search_term: str) -> dict[str, Any] | None:
     """
     Look up a search term in the cache.
 
@@ -77,7 +78,7 @@ def lookup_in_cache(search_term: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def save_to_cache(result: Dict[str, Any]):
+def save_to_cache(result: dict[str, Any]):
     """
     Save a new result to the cache.
 
@@ -97,8 +98,17 @@ def save_to_cache(result: Dict[str, Any]):
     result["timestamp"] = datetime.now()
 
     # ensure all required fields exist
-    for field in ["search_term", "taxonomic_authority", "year", "author",
-                  "reference", "doi", "paper_link", "source", "year_mismatch"]:
+    for field in [
+        "search_term",
+        "taxonomic_authority",
+        "year",
+        "author",
+        "reference",
+        "doi",
+        "paper_link",
+        "source",
+        "year_mismatch",
+    ]:
         if field not in result:
             if field == "year":
                 result[field] = None
@@ -126,21 +136,23 @@ def save_to_cache(result: Dict[str, Any]):
 
 def clear_cache():
     """Clear the entire cache by creating an empty file."""
-    empty_df = pl.DataFrame(schema={
-        "search_term": pl.Utf8,
-        "taxonomic_authority": pl.Utf8,
-        "year": pl.Int64,
-        "author": pl.Utf8,
-        "reference": pl.Utf8,
-        "doi": pl.Utf8,
-        "paper_link": pl.Utf8,
-        "source": pl.Utf8,
-        "timestamp": pl.Datetime,
-    })
+    empty_df = pl.DataFrame(
+        schema={
+            "search_term": pl.Utf8,
+            "taxonomic_authority": pl.Utf8,
+            "year": pl.Int64,
+            "author": pl.Utf8,
+            "reference": pl.Utf8,
+            "doi": pl.Utf8,
+            "paper_link": pl.Utf8,
+            "source": pl.Utf8,
+            "timestamp": pl.Datetime,
+        }
+    )
     empty_df.write_parquet(str(CACHE_FILE))
 
 
-def get_cache_stats() -> Dict[str, Any]:
+def get_cache_stats() -> dict[str, Any]:
     """
     Get cache statistics.
 
@@ -152,11 +164,7 @@ def get_cache_stats() -> Dict[str, Any]:
     cache_df = load_cache()
 
     if cache_df.is_empty():
-        return {
-            "count": 0,
-            "recent": [],
-            "sources": {}
-        }
+        return {"count": 0, "recent": [], "sources": {}}
 
     # count by source
     source_counts = {}
@@ -167,10 +175,12 @@ def get_cache_stats() -> Dict[str, Any]:
 
     # recent searches
     recent = cache_df.sort("timestamp", descending=True).limit(10)
-    recent_list = recent.select("search_term", "source", "timestamp").to_dicts()
+    recent_list = recent.select(
+        "search_term", "source", "timestamp"
+    ).to_dicts()
 
     return {
         "count": len(cache_df),
         "recent": recent_list,
-        "sources": source_counts
+        "sources": source_counts,
     }
