@@ -37,7 +37,9 @@ def display_result(result: dict):
     # check for year mismatch warning
     if result.get("year_mismatch", False):
         st.warning(
-            "⚠️ **Year Mismatch Warning**: No reference found with matching publication year. The reference may not be the original taxonomic description."
+            "⚠️ **Year Mismatch Warning**: No reference found with matching "
+            "publication year. The reference may not be the original "
+            "taxonomic description."
         )
 
     # create two columns
@@ -139,7 +141,7 @@ def show_single_search():
 
     species_name = st.text_input(
         "Enter species name:",
-        placeholder="e.g., Tyrannosaurus rex",
+        placeholder="e.g., Enchodus petrosus",
         key="single_search",
     )
 
@@ -159,7 +161,12 @@ def show_batch_search():
     st.subheader("📋 Batch Search")
 
     # create example file for download
-    example_species = "Stegosaurus stenops\nAmmonites planorbis\nTrilobita paradoxides\nArchaeopteryx lithographica\nMegalodon carcharocles\nPterodactylus antiquus\nIchthyosaurus communis\nBrontosaurus excelsus\nVelociraptor mongoliensis\nMammuthus primigenius"
+    example_species = (
+        "Stegosaurus stenops\nAmmonites planorbis\nTrilobita paradoxides\n"
+        "Archaeopteryx lithographica\nMegalodon carcharocles\nPterodactylus "
+        "antiquus\nIchthyosaurus communis\nBrontosaurus excelsus\n"
+        "Velociraptor mongoliensis\nMammuthus primigenius"
+    )
 
     # option 1: upload file
     st.write("**Option 1: Upload a text file**")
@@ -174,7 +181,11 @@ def show_batch_search():
     species_text = st.text_area(
         "Enter species names (one per line):",
         height=150,
-        placeholder="Stegosaurus stenops\nAmmonites planorbis\nTrilobita paradoxides\nArchaeopteryx lithographica\nMegalodon carcharocles\nPterodactylus antiquus\nIchthyosaurus communis\nBrontosaurus excelsus\nVelociraptor mongoliensis\nMammuthus primigenius",
+        placeholder="Stegosaurus stenops\nAmmonites planorbis\nTrilobita "
+        "paradoxides\nArchaeopteryx lithographica\nMegalodon "
+        "carcharocles\nPterodactylus antiquus\nIchthyosaurus communis"
+        "\nBrontosaurus excelsus\nVelociraptor mongoliensis\nMammuthus "
+        "primigenius",
     )
 
     # option 3: download example file
@@ -193,8 +204,12 @@ def show_batch_search():
         try:
             file_content = uploaded_file.read().decode("utf-8")
             species_text = file_content
+            species_count = len(
+                [line for line in file_content.split("\\n") if line.strip()]
+            )
+            filename = uploaded_file.name
             st.success(
-                f"✅ Loaded {len([line for line in file_content.split('\\n') if line.strip()])} species from file: {uploaded_file.name}"
+                f"✅ Loaded {species_count} species from file: {filename}"
             )
         except Exception as e:
             st.error(f"Error reading file: {e}")
@@ -287,10 +302,12 @@ def show_cache_view():
         # convert to markdown table with all fields
         markdown_rows = []
         markdown_rows.append(
-            "| Search Term | Authority | Year | Author | Reference | DOI | Paper Link | Source | Mismatch | Timestamp |"
+            "| Search Term | Authority | Year | Author | Reference | DOI "
+            "| Paper Link | Source | Mismatch | Timestamp |"
         )
         markdown_rows.append(
-            "|-------------|-----------|------|--------|-----------|-----|------------|--------|----------|-----------|"
+            "|-------------|-----------|------|--------|-----------|-----|"
+            "------------|--------|----------|-----------|"
         )
 
         for row in display_df.to_dicts():
@@ -351,10 +368,14 @@ def show_cache_view():
                 author = "NA"
 
             year_mismatch = "⚠️" if row.get("year_mismatch", False) else "✅"
+            year_display = row["year"] or "—"
 
-            markdown_rows.append(
-                f"| {search_term} | {authority} | {row['year'] or '—'} | {author} | {reference} | {doi} | {paper_link} | {source} | {year_mismatch} | {timestamp} |"
+            table_row = (
+                f"| {search_term} | {authority} | {year_display} | {author} | "
+                f"{reference} | {doi} | {paper_link} | {source} | "
+                f"{year_mismatch} | {timestamp} |"
             )
+            markdown_rows.append(table_row)
 
         st.markdown("\n".join(markdown_rows))
 
@@ -388,7 +409,8 @@ def main():
     st.title("Taxonomic Reference Finder")
     st.markdown("""
     Find original taxonomic descriptions and publications for species names.
-    Results are cached locally in `data/results.parquet` for faster subsequent searches.
+    Results are cached locally in `data/results.parquet` for faster subsequent
+    searches.
     """)
 
     # main tabs
@@ -407,7 +429,17 @@ def main():
     st.markdown("---")
     st.markdown("### How This Works")
     st.markdown("""
-    This application searches multiple taxonomic databases including the Paleobiology Database (PBDB), GBIF, ZooBank, and WoRMS to find original taxonomic authorities and publication references for fossil and modern species. When you search for a species, the system first checks the local cache for previously retrieved results, then queries each database sequentially if no cached data exists. The application uses reference validation to ensure that publication years match the taxonomic authority years, providing warnings when mismatches occur that might indicate the reference is not the original taxonomic description. All successful searches are automatically cached to minimize future API calls and provide faster responses for repeated queries.
+    This application searches multiple taxonomic databases including the
+    Paleobiology Database (PBDB), GBIF, ZooBank, and WoRMS to find original
+    taxonomic authorities and publication references for fossil and modern
+    species. When you search for a species, the system first checks the
+    local cache for previously retrieved results, then queries each database
+    sequentially if no cached data exists. The application uses reference
+    validation to ensure that publication years match the taxonomic authority
+    years, providing warnings when mismatches occur that might indicate the
+    reference is not the original taxonomic description. All successful
+    searches are automatically cached to minimize future API calls and provide
+    faster responses for repeated queries.
     """)
 
     st.markdown("### Notes")

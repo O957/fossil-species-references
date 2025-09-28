@@ -328,8 +328,9 @@ def query_worms(species_name: str) -> dict[str, Any] | None:
                 # get citation
                 aphia_id = record.get("AphiaID")
                 if aphia_id:
+                    base_url = WORMS_BASE_URL
                     citation_url = (
-                        f"{WORMS_BASE_URL}/AphiaRecordByAphiaID/{aphia_id}"
+                        f"{base_url}/AphiaRecordByAphiaID/{aphia_id}"
                     )
                     citation_response = requests.get(citation_url, timeout=5)
                     citation_response.raise_for_status()
@@ -596,8 +597,9 @@ def search_taxonomy(species_name: str) -> dict[str, Any]:
             result["source"] != best_reference_source
             and best_reference_source not in result["source"]
         ):
+            current_source = result["source"]
             result["source"] = (
-                f"{result['source']} (ref: {best_reference_source})"
+                f"{current_source} (ref: {best_reference_source})"
             )
 
     else:
