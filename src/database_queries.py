@@ -228,7 +228,7 @@ def query_zoobank(species_name: str) -> dict[str, Any] | None:
                 "doi": record.get("doi", NOT_AVAILABLE),
                 "source": "ZooBank",
             }
-    except:
+    except (requests.RequestException, KeyError, IndexError, ValueError):
         pass
 
     return None
@@ -347,7 +347,7 @@ def query_worms(species_name: str) -> dict[str, Any] | None:
                         "doi": NOT_AVAILABLE,
                         "source": "WoRMS",
                     }
-    except:
+    except (requests.RequestException, KeyError, IndexError, ValueError):
         pass
 
     return None
@@ -378,7 +378,8 @@ def query_crossref(
 
     try:
         # extract title from reference if it contains full citation
-        # e.g., "E. D. Cope. 1874. Review of the Vertebrata..." -> "Review of the Vertebrata..."
+        # e.g., "E. D. Cope. 1874. Review of the Vertebrata..." -> "Review of
+        # the Vertebrata..."
         title = reference
         if ". " in reference and reference[0].isupper():
             # likely a full citation, extract title part
@@ -482,7 +483,8 @@ def search_taxonomy(species_name: str) -> dict[str, Any]:
         "doi": NOT_AVAILABLE,
         "paper_link": NOT_AVAILABLE,
         "source": NOT_AVAILABLE,
-        "year_mismatch": False,  # flag for reference year not matching authority year
+        # flag for reference year not matching authority year
+        "year_mismatch": False,
     }
 
     # sequential database search (GBIF first)
@@ -520,7 +522,8 @@ def search_taxonomy(species_name: str) -> dict[str, Any]:
             result["source"] = db_result["source"]
             break
 
-    # find best reference using smart prioritization - ONLY accept references with matching years
+    # find best reference using smart prioritization - ONLY accept references
+    # with matching years
     valid_references = []
     mismatched_references = []
 
@@ -534,12 +537,14 @@ def search_taxonomy(species_name: str) -> dict[str, Any]:
 
             # STRICT: only accept references where year matches authority year
             if result["year"] and ref_year == result["year"]:
-                # this reference has the exact matching year - this is the original paper
+                # this reference has the exact matching year - this is the
+                # original paper
 
                 # score the reference quality
                 score = 0
 
-                # prioritize PBDB for paleontological data (usually has best original references)
+                # prioritize PBDB for paleontological data (usually has best
+                # original references)
                 if source == "PBDB":
                     score += 1000
 
@@ -571,7 +576,8 @@ def search_taxonomy(species_name: str) -> dict[str, Any]:
                     }
                 )
             else:
-                # reference year doesn't match - this is NOT the original description
+                # reference year doesn't match - this is NOT the original
+                # description
                 mismatched_references.append(
                     {
                         "reference": ref,

@@ -26,7 +26,7 @@ def load_cache() -> pl.DataFrame:
     if CACHE_FILE.exists():
         try:
             return pl.read_parquet(str(CACHE_FILE))
-        except:
+        except (OSError, pl.exceptions.ComputeError):
             pass
 
     # create empty dataframe with schema
@@ -121,7 +121,7 @@ def save_to_cache(result: dict[str, Any]):
     if result["year"] and result["year"] != NOT_AVAILABLE:
         try:
             result["year"] = int(result["year"])
-        except:
+        except (ValueError, TypeError):
             result["year"] = None
     else:
         result["year"] = None

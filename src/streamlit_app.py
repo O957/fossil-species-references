@@ -214,50 +214,45 @@ def show_batch_search():
         except Exception as e:
             st.error(f"Error reading file: {e}")
 
-    if st.button("Search All", type="primary"):
-        if species_text:
-            species_list = [
-                line.strip()
-                for line in species_text.split("\n")
-                if line.strip()
-            ]
+    if st.button("Search All", type="primary") and species_text:
+        species_list = [
+            line.strip() for line in species_text.split("\n") if line.strip()
+        ]
 
-            # progress bar
-            progress = st.progress(0)
-            status = st.empty()
+        # progress bar
+        progress = st.progress(0)
+        status = st.empty()
 
-            results = []
-            for i, species in enumerate(species_list):
-                status.text(f"Searching for {species}...")
-                result = search_species(species, use_cache=True)
-                results.append(result)
-                progress.progress((i + 1) / len(species_list))
+        results = []
+        for i, species in enumerate(species_list):
+            status.text(f"Searching for {species}...")
+            result = search_species(species, use_cache=True)
+            results.append(result)
+            progress.progress((i + 1) / len(species_list))
 
-            progress.empty()
-            status.empty()
+        progress.empty()
+        status.empty()
 
-            # display results
-            st.subheader("Results")
-            for result in results:
-                with st.expander(
-                    f"{result['search_term']} - {result['source']}"
-                ):
-                    display_result(result)
+        # display results
+        st.subheader("Results")
+        for result in results:
+            with st.expander(f"{result['search_term']} - {result['source']}"):
+                display_result(result)
 
-            # option to download results
-            if results:
-                df = pl.DataFrame(results)
-                # remove from_cache column for export
-                if "from_cache" in df.columns:
-                    df = df.drop("from_cache")
-                csv = df.write_csv()
-                st.download_button(
-                    label="📥 Download Results (CSV)",
-                    data=csv,
-                    file_name="taxonomy_results.csv",
-                    mime="text/csv",
-                    key="download_batch_results",
-                )
+        # option to download results
+        if results:
+            df = pl.DataFrame(results)
+            # remove from_cache column for export
+            if "from_cache" in df.columns:
+                df = df.drop("from_cache")
+            csv = df.write_csv()
+            st.download_button(
+                label="📥 Download Results (CSV)",
+                data=csv,
+                file_name="taxonomy_results.csv",
+                mime="text/csv",
+                key="download_batch_results",
+            )
 
 
 def show_cache_view():
