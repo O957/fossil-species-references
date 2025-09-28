@@ -404,7 +404,7 @@ def main():
     st.title("Taxonomic Reference Finder")
     st.markdown("""
     Find original taxonomic descriptions and publications for species names.
-    Results are cached locally in `data/results.parquet` for faster subsequent
+    Results are cached in `data/results.parquet` for faster subsequent
     searches.
     """)
 
