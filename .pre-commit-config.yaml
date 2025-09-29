@@ -39,7 +39,7 @@ ci:
 ###############################################################################
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
     # prevent giant files from being committed.
     -   id: check-added-large-files
@@ -96,7 +96,7 @@ repos:
 # PYTHON
 ###############################################################################
 -   repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.11.13
+    rev: v0.13.2
     hooks:
     # "currently, the Ruff formatter does not sort imports.
     # In order to both sort imports and format, call
@@ -148,7 +148,7 @@ repos:
 ###############################################################################
 -   repo: https://github.com/astral-sh/uv-pre-commit
     # uv version.
-    rev: 0.7.13
+    rev: 0.8.22
     hooks:
     -   id: uv-lock
 ###############################################################################
@@ -188,7 +188,7 @@ repos:
 # COMMIT MESSAGES
 ###############################################################################
 -   repo: https://github.com/commitizen-tools/commitizen
-    rev: v4.8.3
+    rev: v4.9.1
     hooks:
     -   id: commitizen
 -   repo: https://github.com/jorisroovers/gitlint
