@@ -146,6 +146,7 @@ def clear_cache():
             "doi": pl.Utf8,
             "paper_link": pl.Utf8,
             "source": pl.Utf8,
+            "year_mismatch": pl.Boolean,
             "timestamp": pl.Datetime,
         }
     )
