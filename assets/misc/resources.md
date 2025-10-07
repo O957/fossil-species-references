@@ -6,7 +6,7 @@ _This document captures resources such as links, quotes, or checklists relevant 
 * __This Site As A Streamlit Application__: <https://fsr-pbdb.streamlit.app/>
 * __Streamlit Community Cloud Deployment__: <https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app>
 * __Streamlit Theming__: <https://docs.streamlit.io/develop/concepts/configuration/theming>
-* __Streamlit Config For Themeing__: <https://docs.streamlit.io/develop/api-reference/configuration/config.toml#theme>
+* __Streamlit Config For Theming__: <https://docs.streamlit.io/develop/api-reference/configuration/config.toml#theme>
 * __Streamlit Cloud Hosting Page__: <https://share.streamlit.io/>
 * __Zenodo Page For PBDB Dataset__: <https://zenodo.org/records/17069880>
 * __Search Page For CrossRef__: <https://search.crossref.org/>
